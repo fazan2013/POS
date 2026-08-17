@@ -134,3 +134,12 @@ export const profileApi = {
   // POST /api/auth/change-password
   changePassword: body => post('/auth/change-password', body),
 }
+
+export const storeApi = {
+  get:    ()     => get('/settings/store'),
+  update: body   => put('/settings/store', body),
+}
+export const receiptApi = {
+  get:    ()   => get('/settings/receipt'),
+  update: body => put('/settings/receipt', body),
+}

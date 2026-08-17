@@ -12,6 +12,8 @@ import {
 } from '@tabler/icons-react'
 import { getUser, clearSession } from '../services/api'
 import { profileApi } from '../services/api'
+import { storeApi } from '../services/api'
+import { receiptApi } from '../services/api'
 
 // ── API calls for profile ─────────────────────────
 // Add these endpoints to your api.js:
@@ -553,34 +555,103 @@ function ProfileTab({ onToast }) {
 // ════════════════════════════════════════════════
 // STORE TAB
 // ════════════════════════════════════════════════
+
 function StoreTab({ onToast }) {
+  // ── Refs for all text inputs ──────────────────
   const nameRef    = useRef(null)
   const addressRef = useRef(null)
   const phoneRef   = useRef(null)
   const emailRef   = useRef(null)
   const taxIdRef   = useRef(null)
-
+ 
+  // ── Dropdowns use state (no focus loss risk) ──
   const [currency, setCurrency] = useState('USD')
   const [timezone, setTimezone] = useState('Asia/Colombo')
   const [language, setLanguage] = useState('English')
-  const [saving,   setSaving]   = useState(false)
-
+ 
+  // ── Loading / saving / error state ───────────
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [errors,  setErrors]  = useState({})
+ 
+  // ── Load from API on mount ────────────────────
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const data = await storeApi.get()
+        // Fill dropdown states
+        setCurrency(data.currency || 'USD')
+        setTimezone(data.timezone || 'Asia/Colombo')
+        setLanguage(data.language || 'English')
+ 
+        // Fill text inputs via refs (after mount)
+        setTimeout(() => {
+          if (nameRef.current)    nameRef.current.value    = data.storeName || ''
+          if (addressRef.current) addressRef.current.value = data.address   || ''
+          if (phoneRef.current)   phoneRef.current.value   = data.phone     || ''
+          if (emailRef.current)   emailRef.current.value   = data.email     || ''
+          if (taxIdRef.current)   taxIdRef.current.value   = data.taxId     || ''
+        }, 0)
+      } catch (err) {
+        onToast('Could not load store settings: ' + err.message, 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+ 
+  function clearError(field) {
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }))
+  }
+ 
+  // ── Save to API ───────────────────────────────
   async function handleSave() {
+    const storeName = nameRef.current?.value?.trim()    || ''
+    const address   = addressRef.current?.value?.trim() || ''
+    const phone     = phoneRef.current?.value?.trim()   || ''
+    const email     = emailRef.current?.value?.trim()   || ''
+    const taxId     = taxIdRef.current?.value?.trim()   || ''
+ 
+    // Validate
+    const e = {}
+    if (!storeName) e.storeName = 'Store name is required'
+    if (Object.keys(e).length) { setErrors(e); return }
+ 
     setSaving(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      onToast('Store settings saved', 'success')
-    } catch {
-      onToast('Failed to save', 'error')
+      await storeApi.update({
+        storeName,
+        address,
+        phone,
+        email:    email  || null,
+        taxId:    taxId  || null,
+        currency,
+        timezone,
+        language,
+      })
+      onToast('Store settings saved successfully', 'success')
+    } catch (err) {
+      onToast(err.message || 'Failed to save store settings', 'error')
     } finally {
       setSaving(false)
     }
   }
-
-  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-lg " +
-                     "text-sm focus:outline-none focus:border-blue-400"
-  const selectClass = inputClass + " bg-white appearance-none"
-
+ 
+  // ── Shared input classes ──────────────────────
+  const iClass = (field) =>
+    `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none
+     transition-colors ${errors[field]
+       ? 'border-red-300 focus:border-red-400'
+       : 'border-gray-200 focus:border-blue-400'}`
+ 
+  const sClass = "w-full px-3 py-2.5 border border-gray-200 rounded-lg " +
+                 "text-sm focus:outline-none focus:border-blue-400 " +
+                 "bg-white appearance-none"
+ 
+  if (loading) return <PageLoader />
+ 
   return (
     <Section
       title="Store settings"
@@ -588,58 +659,110 @@ function StoreTab({ onToast }) {
       icon={<IconBuildingStore size={16} />}
     >
       <div className="space-y-4">
-        <Field label="Store name">
-          <input ref={nameRef} defaultValue="PartsPro Auto Spares"
-                 placeholder="Your store name" className={inputClass} />
+ 
+        {/* Store name */}
+        <Field label="Store name" required error={errors.storeName}>
+          <input
+            ref={nameRef}
+            placeholder="e.g. PartsPro Auto Spares"
+            onChange={() => clearError('storeName')}
+            className={iClass('storeName')}
+          />
         </Field>
+ 
+        {/* Address */}
         <Field label="Address">
-          <input ref={addressRef} defaultValue="No 45, Baseline Rd, Colombo 09"
-                 placeholder="Street, City" className={inputClass} />
+          <input
+            ref={addressRef}
+            placeholder="Street, City"
+            className={iClass('')}
+          />
         </Field>
+ 
+        {/* Phone + Email */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Phone">
-            <input ref={phoneRef} defaultValue="+94 11 234 5678"
-                   placeholder="+94 11 234 5678" className={inputClass} />
+            <input
+              ref={phoneRef}
+              placeholder="+94 11 234 5678"
+              className={iClass('')}
+            />
           </Field>
           <Field label="Email">
-            <input ref={emailRef} type="email"
-                   defaultValue="info@partsproapp.com"
-                   placeholder="info@store.com" className={inputClass} />
+            <input
+              ref={emailRef}
+              type="email"
+              placeholder="info@store.com"
+              className={iClass('')}
+            />
           </Field>
         </div>
+ 
+        {/* Tax ID + Currency */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Tax / VAT ID">
-            <input ref={taxIdRef} defaultValue="VAT-12345678"
-                   placeholder="VAT-XXXXXXXX" className={inputClass} />
+            <input
+              ref={taxIdRef}
+              placeholder="VAT-XXXXXXXX"
+              className={iClass('')}
+            />
           </Field>
           <Field label="Currency">
-            <select value={currency} onChange={e => setCurrency(e.target.value)}
-                    className={selectClass}>
-              {['USD', 'LKR', 'EUR', 'GBP', 'AUD'].map(c => (
-                <option key={c}>{c}</option>
+            <select
+              value={currency}
+              onChange={e => setCurrency(e.target.value)}
+              className={sClass}
+            >
+              {['USD', 'LKR', 'EUR', 'GBP', 'AUD', 'INR'].map(c => (
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </Field>
         </div>
+ 
+        {/* Timezone + Language */}
         <div className="grid grid-cols-2 gap-4">
           <Field label="Timezone">
-            <select value={timezone} onChange={e => setTimezone(e.target.value)}
-                    className={selectClass}>
-              {['Asia/Colombo','Asia/Kolkata','UTC','America/New_York','Europe/London'].map(t => (
-                <option key={t}>{t}</option>
+            <select
+              value={timezone}
+              onChange={e => setTimezone(e.target.value)}
+              className={sClass}
+            >
+              {[
+                'Asia/Colombo', 'Asia/Kolkata', 'Asia/Singapore',
+                'UTC', 'America/New_York', 'Europe/London'
+              ].map(t => (
+                <option key={t} value={t}>{t}</option>
               ))}
             </select>
           </Field>
           <Field label="Language">
-            <select value={language} onChange={e => setLanguage(e.target.value)}
-                    className={selectClass}>
-              {['English','Sinhala','Tamil'].map(l => (
-                <option key={l}>{l}</option>
+            <select
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className={sClass}
+            >
+              {['English', 'Sinhala', 'Tamil'].map(l => (
+                <option key={l} value={l}>{l}</option>
               ))}
             </select>
           </Field>
         </div>
-        <SaveButton label="Save store settings" saving={saving} onClick={handleSave} />
+ 
+        {/* Last updated info */}
+        <div className="flex items-center gap-2 px-3 py-2 bg-gray-50
+                        border border-gray-100 rounded-lg">
+          <IconBuildingStore size={13} className="text-gray-400 flex-shrink-0" />
+          <p className="text-xs text-gray-400">
+            Changes will appear on all receipts and reports immediately after saving.
+          </p>
+        </div>
+ 
+        <SaveButton
+          label="Save store settings"
+          saving={saving}
+          onClick={handleSave}
+        />
       </div>
     </Section>
   )
@@ -649,93 +772,312 @@ function StoreTab({ onToast }) {
 // RECEIPT & POS TAB
 // ════════════════════════════════════════════════
 function ReceiptTab({ onToast }) {
+  // ── Refs for numeric + text inputs ───────────
   const taxRateRef      = useRef(null)
   const discountRateRef = useRef(null)
   const discountMinRef  = useRef(null)
-  const footerTextRef   = useRef(null)
-
+  const footerRef       = useRef(null)
+ 
+  // ── Toggle state ──────────────────────────────
   const [showLogo,     setShowLogo]     = useState(true)
-  const [autoPrint,    setAutoPrint]    = useState(false)
   const [showTax,      setShowTax]      = useState(true)
   const [showDiscount, setShowDiscount] = useState(true)
-  const [saving,       setSaving]       = useState(false)
-
+  const [autoPrint,    setAutoPrint]    = useState(false)
+ 
+  // ── Page state ────────────────────────────────
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [errors,  setErrors]  = useState({})
+ 
+  // ── Live margin preview ───────────────────────
+  const [previewTax,  setPreviewTax]  = useState('5.00')
+  const [previewDisc, setPreviewDisc] = useState('3.00')
+  const [previewMin,  setPreviewMin]  = useState('100.00')
+ 
+  // ── Load from API on mount ────────────────────
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const data = await receiptApi.get()
+ 
+        // Set toggle states
+        setShowLogo(data.showLogo)
+        setShowTax(data.showTax)
+        setShowDiscount(data.showDiscount)
+        setAutoPrint(data.autoPrint)
+ 
+        // Set preview values
+        setPreviewTax(data.taxRate?.toFixed(2)         || '5.00')
+        setPreviewDisc(data.discountRate?.toFixed(2)   || '3.00')
+        setPreviewMin(data.discountMinimum?.toFixed(2) || '100.00')
+ 
+        // Fill inputs via refs
+        setTimeout(() => {
+          if (taxRateRef.current)      taxRateRef.current.value      = data.taxRate         ?? 5
+          if (discountRateRef.current) discountRateRef.current.value = data.discountRate    ?? 3
+          if (discountMinRef.current)  discountMinRef.current.value  = data.discountMinimum ?? 100
+          if (footerRef.current)       footerRef.current.value       =
+            data.footerText ?? 'Thank you for your business! Visit us again.'
+        }, 0)
+ 
+      } catch (err) {
+        onToast('Could not load settings: ' + err.message, 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+ 
+  function clearError(field) {
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }))
+  }
+ 
+  // ── Save to API ───────────────────────────────
   async function handleSave() {
+    const taxRate         = parseFloat(taxRateRef.current?.value)      || 0
+    const discountRate    = parseFloat(discountRateRef.current?.value) || 0
+    const discountMinimum = parseFloat(discountMinRef.current?.value)  || 0
+    const footerText      = footerRef.current?.value?.trim()           || ''
+ 
+    // Validate
+    const e = {}
+    if (isNaN(taxRate) || taxRate < 0 || taxRate > 100)
+      e.taxRate = 'Tax rate must be between 0 and 100'
+    if (isNaN(discountRate) || discountRate < 0 || discountRate > 100)
+      e.discountRate = 'Discount rate must be between 0 and 100'
+    if (isNaN(discountMinimum) || discountMinimum < 0)
+      e.discountMinimum = 'Minimum must be 0 or more'
+    if (Object.keys(e).length) { setErrors(e); return }
+ 
     setSaving(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      onToast('POS settings saved', 'success')
-    } catch {
-      onToast('Failed to save', 'error')
+      await receiptApi.update({
+        taxRate,
+        discountRate,
+        discountMinimum,
+        footerText,
+        showLogo,
+        showTax,
+        showDiscount,
+        autoPrint,
+      })
+ 
+      // Update previews
+      setPreviewTax(taxRate.toFixed(2))
+      setPreviewDisc(discountRate.toFixed(2))
+      setPreviewMin(discountMinimum.toFixed(2))
+ 
+      onToast('Receipt & POS settings saved successfully', 'success')
+    } catch (err) {
+      onToast(err.message || 'Failed to save settings', 'error')
     } finally {
       setSaving(false)
     }
   }
-
-  const inputClass = "w-full px-3 py-2.5 border border-gray-200 rounded-lg " +
-                     "text-sm focus:outline-none focus:border-blue-400"
-
+ 
+  // ── Input class ───────────────────────────────
+  const iClass = (field) =>
+    `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none
+     transition-colors ${errors[field]
+       ? 'border-red-300 focus:border-red-400'
+       : 'border-gray-200 focus:border-blue-400'}`
+ 
+  if (loading) return <PageLoader />
+ 
   return (
     <Section
       title="Receipt & POS"
       subtitle="Configure tax, discount and receipt printing"
       icon={<IconReceipt size={16} />}
     >
-      <div className="space-y-5">
-        <div className="grid grid-cols-3 gap-4">
-          <Field label="Tax rate (%)" hint="Applied on every sale">
-            <div className="relative">
-              <input ref={taxRateRef} type="number" min="0" step="0.1"
-                     defaultValue="5" className={inputClass} />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2
-                               text-gray-400 text-xs">%</span>
-            </div>
-          </Field>
-          <Field label="Discount rate (%)" hint="Auto-applied when min met">
-            <div className="relative">
-              <input ref={discountRateRef} type="number" min="0" step="0.1"
-                     defaultValue="3" className={inputClass} />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2
-                               text-gray-400 text-xs">%</span>
-            </div>
-          </Field>
-          <Field label="Discount minimum" hint="Min subtotal for discount">
-            <div className="relative">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2
-                               text-gray-400 text-xs">$</span>
-              <input ref={discountMinRef} type="number" min="0"
-                     defaultValue="100"
-                     className={inputClass + " pl-6"} />
-            </div>
+      <div className="space-y-6">
+ 
+        {/* ── Tax + Discount rates ────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Tax & discount
+          </p>
+          <div className="grid grid-cols-3 gap-4">
+ 
+            {/* Tax rate */}
+            <Field label="Tax rate (%)"
+                   hint="Applied on every sale"
+                   error={errors.taxRate}>
+              <div className="relative">
+                <input
+                  ref={taxRateRef}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  onChange={e => {
+                    setPreviewTax(parseFloat(e.target.value || 0).toFixed(2))
+                    clearError('taxRate')
+                  }}
+                  className={iClass('taxRate') + ' pr-8'}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2
+                                 text-gray-400 text-xs pointer-events-none">%</span>
+              </div>
+            </Field>
+ 
+            {/* Discount rate */}
+            <Field label="Discount rate (%)"
+                   hint="Auto-applied when min met"
+                   error={errors.discountRate}>
+              <div className="relative">
+                <input
+                  ref={discountRateRef}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.1"
+                  onChange={e => {
+                    setPreviewDisc(parseFloat(e.target.value || 0).toFixed(2))
+                    clearError('discountRate')
+                  }}
+                  className={iClass('discountRate') + ' pr-8'}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2
+                                 text-gray-400 text-xs pointer-events-none">%</span>
+              </div>
+            </Field>
+ 
+            {/* Discount minimum */}
+            <Field label="Discount minimum"
+                   hint="Min subtotal to trigger discount"
+                   error={errors.discountMinimum}>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2
+                                 text-gray-400 text-xs pointer-events-none">$</span>
+                <input
+                  ref={discountMinRef}
+                  type="number"
+                  min="0"
+                  step="1"
+                  onChange={e => {
+                    setPreviewMin(parseFloat(e.target.value || 0).toFixed(2))
+                    clearError('discountMinimum')
+                  }}
+                  className={iClass('discountMinimum') + ' pl-6'}
+                />
+              </div>
+            </Field>
+          </div>
+ 
+          {/* Live preview box */}
+          <div className="mt-3 p-4 bg-slate-900 rounded-xl">
+            <p className="text-xs text-slate-400 mb-3 uppercase tracking-wider">
+              Live preview — sample $200 sale
+            </p>
+            {(() => {
+              const subtotal  = 200
+              const tax       = (subtotal * parseFloat(previewTax)  / 100)
+              const discount  = subtotal >= parseFloat(previewMin)
+                ? (subtotal * parseFloat(previewDisc) / 100) : 0
+              const total     = subtotal + tax - discount
+              return (
+                <div className="space-y-1.5">
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Subtotal</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Tax ({previewTax}%)</span>
+                    <span>+${tax.toFixed(2)}</span>
+                  </div>
+                  {discount > 0 ? (
+                    <div className="flex justify-between text-xs text-green-400">
+                      <span>Discount ({previewDisc}% on orders over ${previewMin})</span>
+                      <span>-${discount.toFixed(2)}</span>
+                    </div>
+                  ) : (
+                    <div className="flex justify-between text-xs text-slate-600">
+                      <span>Discount (order under ${previewMin})</span>
+                      <span>$0.00</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between text-sm font-medium
+                                  text-white border-t border-slate-700 pt-2 mt-1">
+                    <span>Total</span>
+                    <span>${total.toFixed(2)}</span>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+ 
+        {/* ── Footer text ─────────────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Receipt footer
+          </p>
+          <Field label="Footer message"
+                 hint="Printed at the bottom of every receipt">
+            <textarea
+              ref={footerRef}
+              rows={3}
+              placeholder="Thank you for your business! Visit us again."
+              className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                         text-sm focus:outline-none focus:border-blue-400 resize-none"
+            />
           </Field>
         </div>
-
-        <Field label="Receipt footer text">
-          <textarea
-            ref={footerTextRef}
-            defaultValue="Thank you for your business! Visit us again."
-            rows={2}
-            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
-                       text-sm focus:outline-none focus:border-blue-400 resize-none"
-          />
-        </Field>
-
-        <div className="border border-gray-100 rounded-xl p-4 space-y-0">
-          <Toggle checked={showLogo}     onChange={setShowLogo}
-                  label="Show store logo on receipt"
-                  sub="Displays your store name at the top" />
-          <Toggle checked={showTax}      onChange={setShowTax}
-                  label="Show tax breakdown"
-                  sub="Show tax line item on receipt" />
-          <Toggle checked={showDiscount} onChange={setShowDiscount}
-                  label="Show discount line"
-                  sub="Display discount when applied" />
-          <Toggle checked={autoPrint}    onChange={setAutoPrint}
-                  label="Auto-print receipt"
-                  sub="Automatically print after completing a sale" />
+ 
+        {/* ── Receipt options ─────────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Receipt options
+          </p>
+          <div className="border border-gray-100 rounded-xl p-4 space-y-0">
+            <Toggle
+              checked={showLogo}
+              onChange={setShowLogo}
+              label="Show store name on receipt"
+              sub="Displays your store name at the top of each receipt"
+            />
+            <Toggle
+              checked={showTax}
+              onChange={setShowTax}
+              label="Show tax line"
+              sub="Shows the tax amount as a separate line on receipt"
+            />
+            <Toggle
+              checked={showDiscount}
+              onChange={setShowDiscount}
+              label="Show discount line"
+              sub="Displays discount applied when order qualifies"
+            />
+            <Toggle
+              checked={autoPrint}
+              onChange={setAutoPrint}
+              label="Auto-print after sale"
+              sub="Automatically opens print dialog after every completed POS sale"
+            />
+          </div>
         </div>
-
-        <SaveButton label="Save POS settings" saving={saving} onClick={handleSave} />
+ 
+        {/* ── Info note ───────────────────────── */}
+        <div className="flex items-start gap-2 px-3 py-3 bg-blue-50
+                        border border-blue-100 rounded-xl">
+          <IconReceipt size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-600 leading-relaxed">
+            Tax rate and discount settings take effect on all new POS sales immediately.
+            Existing orders are not affected.
+          </p>
+        </div>
+ 
+        <SaveButton
+          label="Save POS settings"
+          saving={saving}
+          onClick={handleSave}
+        />
       </div>
     </Section>
   )

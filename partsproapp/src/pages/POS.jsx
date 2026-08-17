@@ -8,13 +8,13 @@ import {
   IconShoppingCart, IconCheck, IconPrinter, IconTrash,
   IconAlertTriangle, IconRefresh, IconUser
 } from '@tabler/icons-react'
-import { partsApi, ordersApi, customersApi } from '../services/api'
+import { partsApi, ordersApi, customersApi,receiptApi } from '../services/api'
 
 // ── Constants ─────────────────────────────────────
+
+
 const CATEGORIES = ['All', 'Engine', 'Brakes', 'Filter', 'Electrical', 'Suspension']
-const TAX_RATE   = 0.05
-const DISC_MIN   = 100
-const DISC_RATE  = 0.03
+
 
 const CAT_STYLES = {
   Engine:     { bg: 'bg-blue-100',   text: 'text-blue-700'   },
@@ -333,6 +333,15 @@ function CustomerSelector({ selectedCustomer, onSelect, onClear }) {
 
 // ── Main POS Component ────────────────────────────
 export default function POS() {
+
+const [posSettings, setPosSettings] = useState({
+  taxRate:         5,
+  discountRate:    3,
+  discountMinimum: 100,
+  autoPrint:       false,
+})
+
+
   // ── Products state ─────────────────────────────
   const [products,     setProducts]     = useState([])
   const [loadingParts, setLoadingParts] = useState(true)
@@ -382,15 +391,33 @@ export default function POS() {
     setTimeout(() => setToast(null), 2000)
   }
 
+  useEffect(() => {
+  async function loadPosSettings() {
+    try {
+      const settings = await receiptApi.get()
+      setPosSettings({
+        taxRate:         settings.taxRate         ?? 5,
+        discountRate:    settings.discountRate    ?? 3,
+        discountMinimum: settings.discountMinimum ?? 100,
+        autoPrint:       settings.autoPrint       ?? false,
+      })
+    } catch (err) {
+      console.warn('Could not load POS settings, using defaults:', err.message)
+    }
+  }
+  loadPosSettings()
+}, [])
+
   // ── Totals ─────────────────────────────────────
   const totals = useMemo(() => {
-    const subtotal = cart.reduce((a, c) => a + c.sellPrice * c.qty, 0)
-    const tax      = Math.round(subtotal * TAX_RATE   * 100) / 100
-    const discount = subtotal > DISC_MIN
-      ? Math.round(subtotal * DISC_RATE * 100) / 100 : 0
-    const total    = subtotal + tax - discount
-    return { subtotal, tax, discount, total }
-  }, [cart])
+  const subtotal = cart.reduce((a, c) => a + c.sellPrice * c.qty, 0)
+  const tax      = Math.round(subtotal * (posSettings.taxRate / 100) * 100) / 100
+  const discount = subtotal >= posSettings.discountMinimum
+    ? Math.round(subtotal * (posSettings.discountRate / 100) * 100) / 100
+    : 0
+  const total = subtotal + tax - discount
+  return { subtotal, tax, discount, total }
+}, [cart, posSettings])
 
   const itemCount = cart.reduce((a, c) => a + c.qty, 0)
 
@@ -470,6 +497,9 @@ export default function POS() {
         customerName: customer?.name || null,
       })
 
+      if (posSettings.autoPrint) {
+        setTimeout(() => window.print(), 800)
+      }
       // Refresh product list to show updated stock
       fetchProducts()
 
