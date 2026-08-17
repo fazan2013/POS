@@ -1,5 +1,5 @@
 
-const BASE_URL = 'http://partsproapi.runasp.net/api'
+const BASE_URL = 'http://localhost:5098/api'
 //import.meta.env.VITE_API_URL || 
 // ── Token helpers ─────────────────────────────────
 export const getToken    = ()  => localStorage.getItem('pp_token')
@@ -116,4 +116,21 @@ export const suppliersApi = {
   update:   (id, body) => put(`/suppliers/${id}`, body),
   delete:   id         => del(`/suppliers/${id}`),
   getStats: ()         => get('/suppliers/stats'),
+}
+
+export const profileApi = {
+  // GET /api/auth/me
+  getMe: () => get('/auth/me'),
+ 
+  // PUT /api/auth/profile
+  updateProfile: body => put('/auth/profile', body),
+ 
+  // POST /api/auth/profile/image  — upload base64 image
+  uploadImage: body => post('/auth/profile/image', body),
+ 
+  // DELETE /api/auth/profile/image — remove image
+  removeImage: () => del('/auth/profile/image'),
+ 
+  // POST /api/auth/change-password
+  changePassword: body => post('/auth/change-password', body),
 }
