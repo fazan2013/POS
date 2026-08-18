@@ -52,31 +52,31 @@ export default function Login() {
               <IconEngine size={20} className="text-slate-900" />
             </div>
             <div>
-              <p className="font-medium text-sky-50">PartsPro</p>
+              <p className="font-medium text-sky-50">NbPos</p>
               <p className="text-xs text-sky-400 uppercase tracking-wider">Inventory & POS</p>
             </div>
           </div>
           <div>
             <h1 className="text-2xl font-medium leading-snug mb-3">
-              Your spare parts business, fully in control
+            Power your daily operations
             </h1>
-            <p className="text-sm text-sky-300 leading-relaxed">
-              Manage inventory, process sales, and track every part
-              from a single dashboard built for speed.
-            </p>
-          </div>
-          <div className="flex gap-8">
-            {[
-              { num: '12k+', label: 'Parts tracked'  },
-              { num: '98%',  label: 'Stock accuracy'  },
-              { num: '3s',   label: 'Avg checkout'    },
-            ].map(s => (
-              <div key={s.label}>
-                <p className="text-xl font-medium text-sky-400">{s.num}</p>
-                <p className="text-xs text-sky-300 mt-1">{s.label}</p>
-              </div>
-            ))}
-          </div>
+        <p className="text-sm text-sky-300 leading-relaxed">
+        From checkout to inventory and reporting, keep every part of
+        your business running smoothly from one place.
+        </p>
+      </div>
+         <div className="flex gap-8">
+  {[
+    { num: '12k+', label: 'Transactions' },
+    { num: '98%', label: 'Accuracy rate' },
+    { num: '3s', label: 'Avg checkout' },
+  ].map(s => (
+    <div key={s.label}>
+      <p className="text-xl font-medium text-sky-400">{s.num}</p>
+      <p className="text-xs text-sky-300 mt-1">{s.label}</p>
+    </div>
+  ))}
+</div>
         </div>
 
         {/* Right panel */}

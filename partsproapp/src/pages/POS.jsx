@@ -8,7 +8,7 @@ import {
   IconShoppingCart, IconCheck, IconPrinter, IconTrash,
   IconAlertTriangle, IconRefresh, IconUser
 } from '@tabler/icons-react'
-import { partsApi, ordersApi, customersApi,receiptApi } from '../services/api'
+import { partsApi, ordersApi, customersApi,receiptApi,categoriesApi } from '../services/api'
 
 // ── Constants ─────────────────────────────────────
 
@@ -362,11 +362,15 @@ const [posSettings, setPosSettings] = useState({
   const [receipt,      setReceipt]      = useState(null)
   const [toast,        setToast]        = useState(null)
 
+  const [categories,     setCategories]     = useState([])
+
   // ── Load products from API ─────────────────────
   const fetchProducts = useCallback(async () => {
     setLoadingParts(true)
     setPartsError(null)
     try {
+
+    
       const res = await partsApi.getAll(
         partsPage,
         12,
