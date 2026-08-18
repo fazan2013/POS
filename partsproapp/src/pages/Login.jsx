@@ -18,9 +18,9 @@ const ROLES = [
 
 export default function Login() {
   const navigate = useNavigate()
-  const [email,       setEmail]       = useState('admin@partsproapp.com')
+  const [email,       setEmail]       = useState('')
   const [password,    setPassword]    = useState('')
-  const [selectedRole,setSelectedRole]= useState('Admin')
+  const [selectedRole,setSelectedRole]= useState('')
   const [loading,     setLoading]     = useState(false)
   const [error,       setError]       = useState('')
 
