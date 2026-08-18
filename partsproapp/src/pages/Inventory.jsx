@@ -1,5 +1,5 @@
 // ================================================
-// src/pages/Inventory.jsx  — fixed version
+// src/pages/Inventory.jsx — categories from API
 // ================================================
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -8,13 +8,14 @@ import {
   IconTrash, IconChevronLeft, IconChevronRight,
   IconRefresh, IconPackage
 } from '@tabler/icons-react'
-import { partsApi } from '../services/api'
+import { partsApi, categoriesApi } from '../services/api'
 
-// ── Simple inline helpers (no external hook needed) ──
-function Spinner() {
+// ── Helpers ───────────────────────────────────────
+function Spinner({ size = 'md' }) {
+  const s = size === 'sm' ? 'w-4 h-4 border' : 'w-6 h-6 border-2'
   return (
-    <div className="w-6 h-6 border-2 border-gray-200 border-t-slate-700
-                    rounded-full animate-spin" />
+    <div className={`${s} border-gray-200 border-t-slate-700
+                    rounded-full animate-spin`} />
   )
 }
 
@@ -22,7 +23,7 @@ function ErrorBanner({ message, onDismiss }) {
   if (!message) return null
   return (
     <div className="flex items-center justify-between gap-3 px-4 py-3
-                    bg-red-50 border border-red-200 rounded-xl text-sm text-red-700 mb-4">
+                    bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
       <span>⚠️ {message}</span>
       <button onClick={onDismiss}
               className="text-red-400 hover:text-red-600 text-lg leading-none font-bold">
@@ -32,22 +33,12 @@ function ErrorBanner({ message, onDismiss }) {
   )
 }
 
-// ── Constants ─────────────────────────────────────
-const CATEGORIES = ['All', 'Engine', 'Brakes', 'Filter', 'Electrical', 'Suspension']
-const PAGE_SIZE  = 10
+const PAGE_SIZE = 10
 
-const CAT_STYLES = {
-  Engine:     'bg-blue-100 text-blue-700',
-  Brakes:     'bg-pink-100 text-pink-700',
-  Filter:     'bg-sky-100 text-sky-700',
-  Electrical: 'bg-yellow-100 text-yellow-700',
-  Suspension: 'bg-purple-100 text-purple-700',
-}
-
-// ── Main Component ────────────────────────────────
 export default function Inventory() {
   const navigate = useNavigate()
 
+  // ── Parts state ───────────────────────────────
   const [data,     setData]     = useState({ data: [], totalCount: 0, totalPages: 1 })
   const [loading,  setLoading]  = useState(true)
   const [error,    setError]    = useState(null)
@@ -56,7 +47,27 @@ export default function Inventory() {
   const [page,     setPage]     = useState(1)
   const [deleting, setDeleting] = useState(null)
 
-  // ── Fetch parts from API ──────────────────────
+  // ── Categories state ──────────────────────────
+  const [categories,        setCategories]        = useState([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+
+  // ── Load categories from API ──────────────────
+  useEffect(() => {
+    async function loadCategories() {
+      setLoadingCategories(true)
+      try {
+        const data = await categoriesApi.getAll()
+        setCategories(data || [])
+      } catch (err) {
+        console.warn('Could not load categories:', err.message)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+    loadCategories()
+  }, [])
+
+  // ── Load parts from API ───────────────────────
   const fetchParts = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -76,9 +87,7 @@ export default function Inventory() {
   }, [page, search, category])
 
   useEffect(() => { fetchParts() }, [fetchParts])
-
-  // Reset to page 1 when filters change
-  useEffect(() => { setPage(1) }, [search, category])
+  useEffect(() => { setPage(1)  }, [search, category])
 
   // ── Delete part ───────────────────────────────
   async function handleDelete(part) {
@@ -94,7 +103,19 @@ export default function Inventory() {
     }
   }
 
-  // ── Stock status helpers ──────────────────────
+  // ── Category badge style from colorCode ───────
+  function catBadgeStyle(partCategoryName) {
+    const cat   = categories.find(c => c.name === partCategoryName)
+    const color = cat?.colorCode
+    if (!color) return { background: '#f3f4f6', color: '#4b5563' }
+    // Create a light badge: 15% opacity background, full color text
+    return {
+      background: color + '25',
+      color:      color,
+    }
+  }
+
+  // ── Stock helpers ─────────────────────────────
   function getStatusColor(status) {
     if (status === 'Out of stock') return 'text-red-500'
     if (status === 'Low stock')    return 'text-amber-500'
@@ -109,21 +130,16 @@ export default function Inventory() {
 
   function getBarWidth(part) {
     if (part.quantity === 0) return '0%'
-    const max = Math.max(part.minStock * 5, part.quantity)
+    const max = Math.max(part.minStock * 5, part.quantity, 1)
     return `${Math.min((part.quantity / max) * 100, 100)}%`
   }
 
-  // ── Pagination helpers ────────────────────────
-  function getPageNumbers() {
+  // ── Pagination ────────────────────────────────
+  function pageNumbers() {
     const pages = []
     for (let i = 1; i <= data.totalPages; i++) {
-      if (
-        i === 1 ||
-        i === data.totalPages ||
-        (i >= page - 1 && i <= page + 1)
-      ) {
+      if (i === 1 || i === data.totalPages || Math.abs(i - page) <= 1)
         pages.push(i)
-      }
     }
     return pages
   }
@@ -131,7 +147,7 @@ export default function Inventory() {
   return (
     <div className="p-4 md:p-6 space-y-5">
 
-      {/* ── Page Header ──────────────── */}
+      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <h1 className="text-xl font-medium text-gray-900">Parts inventory</h1>
@@ -140,9 +156,7 @@ export default function Inventory() {
             {data.totalCount} parts
           </span>
         </div>
-
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Search */}
           <div className="relative">
             <IconSearch size={14}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -155,80 +169,108 @@ export default function Inventory() {
                          focus:outline-none focus:border-blue-400 bg-white w-48"
             />
           </div>
-
-          {/* Refresh */}
-          <button
-            onClick={fetchParts}
-            className="w-8 h-8 flex items-center justify-center border border-gray-200
-                       rounded-lg text-gray-500 hover:border-gray-300 bg-white"
-          >
+          <button onClick={fetchParts}
+                  className="w-8 h-8 flex items-center justify-center border
+                             border-gray-200 rounded-lg text-gray-500
+                             hover:border-gray-300 bg-white">
             <IconRefresh size={14} />
           </button>
-
-          {/* Export */}
-          <button
-            className="flex items-center gap-1.5 px-3 py-2 border border-gray-200
-                       rounded-lg text-xs bg-white text-gray-600 hover:border-gray-300"
-          >
+          <button className="flex items-center gap-1.5 px-3 py-2 border
+                             border-gray-200 rounded-lg text-xs bg-white
+                             text-gray-600 hover:border-gray-300">
             <IconDownload size={13} /> Export
           </button>
-
-          {/* Add part */}
-          <button
-            onClick={() => navigate('/parts/add')}
-            className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white
-                       rounded-lg text-xs font-medium hover:bg-slate-700"
-          >
+          <button onClick={() => navigate('/parts/add')}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-900
+                             text-white rounded-lg text-xs font-medium
+                             hover:bg-slate-700">
             <IconPlus size={13} /> Add part
           </button>
         </div>
       </div>
 
-      {/* ── Error Banner ─────────────── */}
       <ErrorBanner message={error} onDismiss={() => setError(null)} />
 
-      {/* ── Category Filter Tabs ──────── */}
+      {/* ── Category filter tabs — from API ────── */}
       <div className="flex gap-2 flex-wrap">
-        {CATEGORIES.map(cat => (
-          <button
-            key={cat}
-            onClick={() => setCategory(cat)}
-            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all
-              ${category === cat
-                ? 'bg-slate-900 text-white'
-                : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
-          >
-            {cat}
-          </button>
-        ))}
+
+        {/* All — always first */}
+        <button
+          onClick={() => setCategory('All')}
+          className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all
+            ${category === 'All'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
+        >
+          All
+        </button>
+
+        {/* Loading skeletons */}
+        {loadingCategories ? (
+          Array(6).fill(0).map((_, i) => (
+            <div key={i}
+                 className="w-20 h-7 bg-gray-100 rounded-full animate-pulse" />
+          ))
+        ) : (
+          categories.map(cat => (
+            <button
+              key={cat.id}
+              onClick={() => setCategory(cat.name)}
+              className={`px-4 py-1.5 rounded-full text-xs font-medium
+                          transition-all flex items-center gap-1.5
+                ${category === cat.name
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
+            >
+              {/* Color dot */}
+              {cat.colorCode && category !== cat.name && (
+                <span
+                  className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                  style={{ background: cat.colorCode }}
+                />
+              )}
+              {cat.name}
+              {/* Parts count */}
+              {cat.partsCount > 0 && (
+                <span className={`text-[9px] px-1 py-0.5 rounded-full
+                  ${category === cat.name
+                    ? 'bg-white/20 text-white'
+                    : 'bg-gray-100 text-gray-400'}`}>
+                  {cat.partsCount}
+                </span>
+              )}
+            </button>
+          ))
+        )}
       </div>
 
-      {/* ── Table Card ───────────────── */}
+      {/* ── Parts Table ──────────────────────── */}
       <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
 
-        {/* Table Head */}
+        {/* Table head */}
         <div className="hidden md:grid
                         grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_0.7fr]
                         px-4 py-2.5 bg-gray-50 border-b border-gray-100">
           {['Part', 'Category', 'Stock', 'Unit price', 'Status', 'Actions'].map(h => (
             <p key={h}
-               className="text-[10px] font-medium text-gray-400 uppercase tracking-wider">
+               className="text-[10px] font-medium text-gray-400
+                          uppercase tracking-wider">
               {h}
             </p>
           ))}
         </div>
 
-        {/* Loading state */}
+        {/* Loading */}
         {loading && (
           <div className="flex items-center justify-center py-16">
             <Spinner />
           </div>
         )}
 
-        {/* Empty state */}
+        {/* Empty */}
         {!loading && data.data.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16
-                          text-gray-400 gap-3">
+          <div className="flex flex-col items-center justify-center
+                          py-16 text-gray-400 gap-3">
             <IconPackage size={36} className="text-gray-200" />
             <p className="text-sm">No parts found</p>
             <p className="text-xs text-gray-300">
@@ -237,16 +279,15 @@ export default function Inventory() {
           </div>
         )}
 
-        {/* Part rows */}
+        {/* Rows */}
         {!loading && data.data.map(part => (
-          <div
-            key={part.id}
-            className="grid grid-cols-1
-                       md:grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_0.7fr]
-                       px-4 py-3.5 border-b border-gray-50 last:border-0
-                       hover:bg-gray-50 transition-colors items-center
-                       gap-2 md:gap-0"
-          >
+          <div key={part.id}
+               className="grid grid-cols-1
+                          md:grid-cols-[2fr_1.2fr_1.2fr_1fr_1fr_0.7fr]
+                          px-4 py-3.5 border-b border-gray-50 last:border-0
+                          hover:bg-gray-50 transition-colors items-center
+                          gap-2 md:gap-0">
+
             {/* Part name + code */}
             <div>
               <p className="text-xs font-medium text-gray-900">{part.name}</p>
@@ -255,11 +296,14 @@ export default function Inventory() {
               </p>
             </div>
 
-            {/* Category badge */}
+            {/* Category badge — color from DB */}
             <div>
-              <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
-                ${CAT_STYLES[part.category] || 'bg-gray-100 text-gray-600'}`}>
-                {part.category}
+              <span
+                className="text-[10px] font-medium px-2 py-0.5 rounded-full
+                           inline-block"
+                style={catBadgeStyle(part.category)}
+              >
+                {part.category || '—'}
               </span>
             </div>
 
@@ -285,15 +329,14 @@ export default function Inventory() {
             <div className="flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full inline-block
                 ${part.stockStatus === 'Out of stock' ? 'bg-red-400'
-                  : part.stockStatus === 'Low stock'  ? 'bg-amber-400'
-                  : 'bg-green-500'}`}
-              />
+                : part.stockStatus === 'Low stock'    ? 'bg-amber-400'
+                : 'bg-green-500'}`} />
               <span className={`text-xs ${getStatusColor(part.stockStatus)}`}>
                 {part.stockStatus}
               </span>
             </div>
 
-            {/* Action buttons */}
+            {/* Actions */}
             <div className="flex gap-1.5">
               <button
                 onClick={() => navigate(`/parts/edit/${part.id}`)}
@@ -312,15 +355,13 @@ export default function Inventory() {
                            hover:border-red-300 hover:text-red-500
                            transition-colors disabled:opacity-50"
               >
-                {deleting === part.id
-                  ? <Spinner />
-                  : <IconTrash size={13} />}
+                {deleting === part.id ? <Spinner size="sm" /> : <IconTrash size={13} />}
               </button>
             </div>
           </div>
         ))}
 
-        {/* ── Pagination ───────────────── */}
+        {/* Pagination */}
         <div className="flex items-center justify-between px-4 py-3
                         border-t border-gray-100">
           <p className="text-xs text-gray-400">
@@ -328,9 +369,7 @@ export default function Inventory() {
               ? `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, data.totalCount)} of ${data.totalCount} parts`
               : 'No parts'}
           </p>
-
           <div className="flex gap-1 items-center">
-            {/* Prev */}
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
@@ -340,15 +379,10 @@ export default function Inventory() {
             >
               <IconChevronLeft size={13} />
             </button>
-
-            {/* Page numbers */}
-            {getPageNumbers().map((p, idx, arr) => (
+            {pageNumbers().map((p, idx, arr) => (
               <span key={p}>
                 {idx > 0 && arr[idx - 1] !== p - 1 && (
-                  <span className="w-7 h-7 flex items-center justify-center
-                                   text-xs text-gray-400">
-                    …
-                  </span>
+                  <span className="w-5 text-center text-xs text-gray-400">…</span>
                 )}
                 <button
                   onClick={() => setPage(p)}
@@ -362,8 +396,6 @@ export default function Inventory() {
                 </button>
               </span>
             ))}
-
-            {/* Next */}
             <button
               onClick={() => setPage(p => Math.min(data.totalPages, p + 1))}
               disabled={page === data.totalPages || data.totalPages === 0}

@@ -10,7 +10,7 @@ import {
   IconBuildingBank, IconRefresh, IconBan,
   IconAlertTriangle
 } from '@tabler/icons-react'
-import { ordersApi } from '../services/api'
+import { ordersApi,fmt } from '../services/api'
 import { getUser } from '../services/api'
 
 // ── Constants ─────────────────────────────────────
@@ -68,7 +68,7 @@ function CancelModal({ order, onConfirm, onCancel, loading }) {
           <p className="text-xs font-medium text-blue-600">{order.orderNumber}</p>
           <p className="text-xs text-gray-500 mt-1">{order.customerName}</p>
           <p className="text-sm font-medium text-gray-900 mt-1">
-            ${order.total?.toFixed(2)}
+            {fmt(order.total?.toFixed(2))}
           </p>
         </div>
         <p className="text-xs text-gray-400 text-center mb-5">
@@ -123,7 +123,7 @@ function OrderModal({ order, onClose, onStatusUpdate, onCancelRequest }) {
   if (!order) return null
 
   const canCancel = order.status !== 'Cancelled'
-  const fmt = v => '$' + (v ?? 0).toFixed(2)
+  //const fmt = v => '$' + (v ?? 0).toFixed(2)
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center
@@ -188,11 +188,11 @@ function OrderModal({ order, onClose, onStatusUpdate, onCancelRequest }) {
                   <div>
                     <p className="text-sm text-gray-800">{item.partName}</p>
                     <p className="text-xs text-gray-400">
-                      ${item.unitPrice?.toFixed(2)} × {item.quantity}
+                      {fmt(item.unitPrice?.toFixed(2))} × {item.quantity}
                     </p>
                   </div>
                   <p className="text-sm font-medium text-gray-900">
-                    ${item.total?.toFixed(2)}
+                    {fmt(item.total?.toFixed(2))}
                   </p>
                 </div>
               ))}
@@ -422,8 +422,8 @@ export default function Orders() {
           {[
             { label: 'Total orders',    value: summary.totalOrders,                    color: 'text-gray-900'   },
             { label: 'Today orders',    value: summary.todayOrders,                    color: 'text-blue-600'   },
-            { label: "Today's revenue", value: `$${summary.todayRevenue?.toFixed(2)}`, color: 'text-green-600'  },
-            { label: 'Monthly revenue', value: `$${summary.monthlyRevenue?.toFixed(2)}`,color: 'text-purple-600'},
+            { label: "Today's revenue", value: `${fmt(summary.todayRevenue?.toFixed(2))}`, color: 'text-green-600'  },
+            { label: 'Monthly revenue', value: `${fmt(summary.monthlyRevenue?.toFixed(2))}`,color: 'text-purple-600'},
           ].map(c => (
             <div key={c.label}
                  className="bg-white border border-gray-100 rounded-xl p-4">
@@ -538,7 +538,7 @@ export default function Orders() {
 
             {/* Total */}
             <p className="text-xs font-medium text-gray-900">
-              ${order.total?.toFixed(2)}
+              {fmt(order.total?.toFixed(2))}
             </p>
 
             {/* Cancel button — inline on row */}

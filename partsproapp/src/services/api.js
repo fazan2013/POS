@@ -1,10 +1,21 @@
 
 const BASE_URL = 'http://localhost:5098/api'
+
 //import.meta.env.VITE_API_URL || 
 // ── Token helpers ─────────────────────────────────
 export const getToken    = ()  => localStorage.getItem('pp_token')
 //export const getUser     = ()  => JSON.parse(localStorage.getItem('pp_user') || '{}')
 export const isLoggedIn  = ()  => !!getToken()
+
+let _currencySymbol = 'Rs.'
+export function setCurrency(symbol) { _currencySymbol = symbol || 'Rs.' }
+export function getCurrency()       { return _currencySymbol }
+export function fmt(value) {
+  const num = isNaN(Number(value)) ? 0 : Number(value)
+  return `${_currencySymbol} ${num.toLocaleString(undefined, {
+    minimumFractionDigits: 2, maximumFractionDigits: 2,
+  })}`
+}
 
 export function getUser() {
   try {

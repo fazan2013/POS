@@ -203,7 +203,7 @@ function UserPopup({ user, role, onClose, onLogout, onSettings }) {
           </div>
           <div>
             <p className="text-xs font-medium text-red-600">Sign out</p>
-            <p className="text-[10px] text-red-400">Log out of PartsPro</p>
+            <p className="text-[10px] text-red-400">Log out of NB POS</p>
           </div>
         </button>
       </div>
@@ -263,7 +263,7 @@ export default function Layout({ children }) {
             <IconEngine size={16} className="text-slate-900" />
           </div>
           <div>
-            <p className="text-sm font-medium text-sky-50">PartsPro</p>
+            <p className="text-sm font-medium text-sky-50">NB POS</p>
             <p className="text-[10px] text-sky-400 uppercase tracking-wider">
               Inventory & POS
             </p>

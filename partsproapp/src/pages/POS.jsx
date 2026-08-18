@@ -8,7 +8,7 @@ import {
   IconShoppingCart, IconCheck, IconPrinter, IconTrash,
   IconAlertTriangle, IconRefresh, IconUser
 } from '@tabler/icons-react'
-import { partsApi, ordersApi, customersApi,receiptApi,categoriesApi } from '../services/api'
+import { partsApi, ordersApi, customersApi,receiptApi,categoriesApi,fmt } from '../services/api'
 
 // ── Constants ─────────────────────────────────────
 
@@ -74,7 +74,7 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
                   <span className="text-gray-400 ml-1">×{item.qty}</span>
                 </span>
                 <span className="font-medium text-gray-900">
-                  ${(item.sellPrice * item.qty).toFixed(2)}
+                  {fmt((item.sellPrice * item.qty).toFixed(2))}
                 </span>
               </div>
             ))}
@@ -84,22 +84,22 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
           <div className="border-t border-gray-100 pt-3 space-y-1.5">
             <div className="flex justify-between text-xs text-gray-500">
               <span>Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span>{fmt(totals.subtotal.toFixed(2))}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Tax (5%)</span>
-              <span>${totals.tax.toFixed(2)}</span>
+              <span>{fmt(totals.tax.toFixed(2))}</span>
             </div>
             {totals.discount > 0 && (
               <div className="flex justify-between text-xs text-green-600">
                 <span>Discount (3%)</span>
-                <span>-${totals.discount.toFixed(2)}</span>
+                <span>-{fmt(totals.discount.toFixed(2))}</span>
               </div>
             )}
             <div className="flex justify-between text-base font-medium
                             text-gray-900 border-t border-gray-100 pt-2 mt-1">
               <span>Total</span>
-              <span>${totals.total.toFixed(2)}</span>
+              <span>{fmt(totals.total.toFixed(2))}</span>
             </div>
           </div>
         </div>
@@ -170,7 +170,7 @@ function ProductCard({ product, onAdd }) {
 
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium text-gray-900">
-          ${product.sellPrice?.toFixed(2)}
+          {fmt(product.sellPrice?.toFixed(2))}
         </span>
         <span className="text-[10px] text-gray-400">
           {isOut ? 'Out of stock' : `${product.quantity} left`}
@@ -188,7 +188,7 @@ function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
       <div className="flex-1 min-w-0">
         <p className="text-xs font-medium text-gray-900 truncate">{item.name}</p>
         <p className="text-[10px] text-gray-400">
-          ${item.sellPrice?.toFixed(2)} each
+          {fmt(item.sellPrice?.toFixed(2))} each
         </p>
       </div>
 
@@ -217,7 +217,7 @@ function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
 
       {/* Line total */}
       <span className="text-xs font-medium text-gray-900 w-14 text-right">
-        ${(item.sellPrice * item.qty).toFixed(2)}
+        {fmt((item.sellPrice * item.qty).toFixed(2))}
       </span>
 
       {/* Remove */}
@@ -341,7 +341,8 @@ const [posSettings, setPosSettings] = useState({
   autoPrint:       false,
 })
 
-
+const [categories,        setCategories]        = useState([])
+const [loadingCategories, setLoadingCategories] = useState(true)
   // ── Products state ─────────────────────────────
   const [products,     setProducts]     = useState([])
   const [loadingParts, setLoadingParts] = useState(true)
@@ -362,7 +363,7 @@ const [posSettings, setPosSettings] = useState({
   const [receipt,      setReceipt]      = useState(null)
   const [toast,        setToast]        = useState(null)
 
-  const [categories,     setCategories]     = useState([])
+//  const [categories,     setCategories]     = useState([])
 
   // ── Load products from API ─────────────────────
   const fetchProducts = useCallback(async () => {
@@ -411,6 +412,24 @@ const [posSettings, setPosSettings] = useState({
   }
   loadPosSettings()
 }, [])
+
+//
+useEffect(() => {
+  async function loadCategories() {
+    setLoadingCategories(true)
+    try {
+      const data = await categoriesApi.getAll()
+      setCategories(data || [])
+    } catch (err) {
+      console.warn('Could not load categories:', err.message)
+    } finally {
+      setLoadingCategories(false)
+    }
+  }
+  loadCategories()
+}, [])
+//
+
 
   // ── Totals ─────────────────────────────────────
   const totals = useMemo(() => {
@@ -591,22 +610,53 @@ const [posSettings, setPosSettings] = useState({
         </div>
 
         {/* Category Tabs */}
-        <div className="bg-white border-b border-gray-100 px-4 py-2.5
-                        flex gap-2 overflow-x-auto">
-          {CATEGORIES.map(cat => (
-            <button
-              key={cat}
-              onClick={() => setActiveCat(cat)}
-              className={`px-4 py-1.5 rounded-full text-xs font-medium
-                          whitespace-nowrap flex-shrink-0 transition-all
-                ${activeCat === cat
+<div className="bg-white border-b border-gray-100 px-4 py-2.5
+                flex gap-2 overflow-x-auto">
+ 
+  {/* "All" is always first */}
+  <button
+    onClick={() => setActiveCat('All')}
+    className={`px-4 py-1.5 rounded-full text-xs font-medium
+                whitespace-nowrap flex-shrink-0 transition-all
+                ${activeCat === 'All'
                   ? 'bg-slate-900 text-white'
                   : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
-            >
-              {cat}
-            </button>
-          ))}
-        </div>
+  >
+    All
+  </button>
+ 
+  {/* Dynamic categories from DB */}
+  {loadingCategories ? (
+    // Skeleton placeholders while loading
+    Array(5).fill(0).map((_, i) => (
+      <div key={i}
+           className="w-16 h-7 bg-gray-100 rounded-full animate-pulse
+                      flex-shrink-0" />
+    ))
+  ) : (
+    categories.map(cat => (
+      <button
+        key={cat.id}
+        onClick={() => setActiveCat(cat.name)}
+        className={`px-4 py-1.5 rounded-full text-xs font-medium
+                    whitespace-nowrap flex-shrink-0 transition-all
+                    ${activeCat === cat.name
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
+      >
+        {/* Show color dot if category has a color */}
+        {cat.colorCode && (
+          <span
+            className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
+            style={{ background: cat.colorCode }}
+          />
+        )}
+        {cat.name}
+      </button>
+    ))
+  )}
+</div>
+
 
         {/* Error banner */}
         {partsError && (
@@ -743,22 +793,22 @@ const [posSettings, setPosSettings] = useState({
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-gray-500">
               <span>Subtotal</span>
-              <span>${totals.subtotal.toFixed(2)}</span>
+              <span>{fmt(totals.subtotal.toFixed(2))}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
               <span>Tax (5%)</span>
-              <span>${totals.tax.toFixed(2)}</span>
+              <span>{fmt(totals.tax.toFixed(2))}</span>
             </div>
             {totals.discount > 0 && (
               <div className="flex justify-between text-xs text-green-600">
                 <span>Discount (3%)</span>
-                <span>-${totals.discount.toFixed(2)}</span>
+                <span>-{fmt(totals.discount.toFixed(2))}</span>
               </div>
             )}
             <div className="flex justify-between text-sm font-medium
                             text-gray-900 border-t border-gray-100 pt-2">
               <span>Total</span>
-              <span>${totals.total.toFixed(2)}</span>
+              <span>{fmt(totals.total.toFixed(2))}</span>
             </div>
           </div>
 
@@ -811,7 +861,7 @@ const [posSettings, setPosSettings] = useState({
             {checkingOut ? (
               <><Spinner size="sm" /> Processing…</>
             ) : (
-              <><IconCheck size={16} /> Complete sale · ${totals.total.toFixed(2)}</>
+              <><IconCheck size={16} /> Complete sale · {fmt(totals.total.toFixed(2))}</>
             )}
           </button>
         </div>

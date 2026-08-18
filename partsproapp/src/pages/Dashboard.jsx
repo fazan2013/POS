@@ -8,7 +8,7 @@ import {
   IconShoppingCart, IconPackage, IconAlertTriangle,
   IconChartBar, IconTrendingUp, IconDownload, IconCalendar
 } from '@tabler/icons-react'
-import { partsApi, ordersApi } from '../services/api'
+import { partsApi, ordersApi,fmt } from '../services/api'
 import { PageLoader, ErrorBanner } from '../hooks/useApi'
 
 const CATEGORY_COLORS = ['#3b82f6','#22c55e','#f59e0b','#a855f7','#ef4444']
@@ -86,7 +86,7 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard
           label="Today's sales"
-          value={summary ? `$${summary.todayRevenue?.toFixed(2)}` : '—'}
+          value={summary ? `${fmt(summary.todayRevenue?.toFixed(2))}` : '—'}
           sub={`${summary?.todayOrders ?? 0} orders today`}
           subColor="text-green-500"
           icon={<IconShoppingCart size={16} className="text-blue-500" />}
@@ -110,7 +110,7 @@ export default function Dashboard() {
         />
         <MetricCard
           label="Monthly revenue"
-          value={summary ? `$${summary.monthlyRevenue?.toFixed(2)}` : '—'}
+          value={summary ? `${fmt(summary.monthlyRevenue?.toFixed(2))}` : '—'}
           sub={`${summary?.completed ?? 0} completed orders`}
           subColor="text-green-500"
           icon={<IconChartBar size={16} className="text-purple-500" />}
@@ -140,7 +140,7 @@ export default function Dashboard() {
         <div className="bg-slate-900 text-white rounded-xl p-5 flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Total inventory value</p>
-            <p className="text-3xl font-medium">${stats.inventoryValue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <p className="text-3xl font-medium">{fmt(stats.inventoryValue?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }))}</p>
             <p className="text-xs text-slate-400 mt-1">{stats.totalParts} parts across all categories</p>
           </div>
           <div className="text-right">
@@ -156,7 +156,7 @@ export default function Dashboard() {
         <div className="bg-white border border-gray-100 rounded-xl p-5">
           <p className="text-sm font-medium text-gray-900 mb-1">Average order value</p>
           <p className="text-3xl font-medium text-blue-600">
-            ${summary.averageOrderValue?.toFixed(2) ?? '0.00'}
+            {fmt(summary.averageOrderValue?.toFixed(2)) ?? '0.00'}
           </p>
           <p className="text-xs text-gray-400 mt-1">across all {summary.totalOrders} orders</p>
         </div>

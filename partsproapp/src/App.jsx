@@ -17,6 +17,8 @@ import Customers from './pages/Customers'
 import Reports   from './pages/Reports'
 import Settings  from './pages/Settings'
 import PartForm  from './pages/PartForm'
+import { storeApi,setCurrency } from './services/api'
+import { useEffect } from 'react'
 
 // ── Default home by role ──────────────────────────
 function RoleHome() {
@@ -43,6 +45,23 @@ function Protected({ path, children }) {
 }
 
 export default function App() {
+
+  useEffect(() => {
+  async function loadCurrency() {
+    try {
+      const settings = await storeApi.get()
+      if (settings.currency) {
+        setCurrency(settings.currency)
+      }
+    } catch {
+      console.warn('Failed to load currency from API, using default Rs.')
+      // use default Rs.
+    }
+  }
+  if (isLoggedIn()) loadCurrency()
+}, [])
+
+
   return (
     <BrowserRouter>
       <Routes>
