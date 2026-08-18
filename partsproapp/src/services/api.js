@@ -3,16 +3,32 @@ const BASE_URL = 'http://localhost:5098/api'
 //import.meta.env.VITE_API_URL || 
 // ── Token helpers ─────────────────────────────────
 export const getToken    = ()  => localStorage.getItem('pp_token')
-export const getUser     = ()  => JSON.parse(localStorage.getItem('pp_user') || '{}')
+//export const getUser     = ()  => JSON.parse(localStorage.getItem('pp_user') || '{}')
 export const isLoggedIn  = ()  => !!getToken()
 
+export function getUser() {
+  try {
+    const raw = localStorage.getItem('pp_user')
+    if (!raw) return {}
+    return JSON.parse(raw)
+    // Returns { fullName, email, role, profileImage, expiresAt }
+  } catch {
+    return {}
+  }
+}
+
 export function saveSession(data) {
+  // Read any existing stored data (to preserve profileImage)
+  const existing = JSON.parse(localStorage.getItem('pp_user') || '{}')
+ 
   localStorage.setItem('pp_token', data.token)
   localStorage.setItem('pp_user', JSON.stringify({
-    fullName:  data.fullName,
-    email:     data.email,
-    role:      data.role,
-    expiresAt: data.expiresAt,
+    ...existing,              // keep existing profileImage if present
+    fullName:     data.fullName,
+    email:        data.email,
+    role:         data.role,
+    expiresAt:    data.expiresAt,
+    // profileImage NOT overwritten on login — stays from previous session
   }))
 }
 
@@ -142,4 +158,79 @@ export const storeApi = {
 export const receiptApi = {
   get:    ()   => get('/settings/receipt'),
   update: body => put('/settings/receipt', body),
+}
+
+export const notifApi = {
+  get:    ()     => get('/settings/notifications'),
+  update: body   => put('/settings/notifications', body),
+}
+export const appearanceApi = {
+  get:    ()     => get('/settings/appearance'),
+  update: body   => put('/settings/appearance', body),
+}
+
+export const exportApi = {
+  // Get record counts summary
+  getSummary: () => get('/export/summary'),
+ 
+  // Download CSV files — uses direct fetch with blob
+  downloadInventory: () => downloadFile('/export/inventory', 'inventory.csv'),
+  downloadOrders:    () => downloadFile('/export/orders',    'orders.csv'),
+  downloadCustomers: () => downloadFile('/export/customers', 'customers.csv'),
+  downloadSuppliers: () => downloadFile('/export/suppliers', 'suppliers.csv'),
+  downloadBackup:    () => downloadFile('/export/full-backup', 'partsproapp_backup.json'),
+}
+
+export const categoriesApi = {
+  getAll:  ()          => get('/categories'),
+  getById: (id)        => get(`/categories/${id}`),
+  create:  (body)      => post('/categories', body),
+  update:  (id, body)  => put(`/categories/${id}`, body),
+  delete:  (id)        => del(`/categories/${id}`),
+}
+ 
+export const brandsApi = {
+  getAll:  ()          => get('/brands'),
+  getById: (id)        => get(`/brands/${id}`),
+  create:  (body)      => post('/brands', body),
+  update:  (id, body)  => put(`/brands/${id}`, body),
+  delete:  (id)        => del(`/brands/${id}`),
+}
+
+
+async function downloadFile(path, defaultFileName) {
+  const token = getToken()
+ 
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method:  'GET',
+    headers: {
+      'Authorization': `Bearer ${token}`
+    }
+  })
+ 
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: res.statusText }))
+    throw new Error(err.message || 'Download failed')
+  }
+ 
+  // Get filename from Content-Disposition header if present
+  const disposition = res.headers.get('Content-Disposition')
+  let fileName = defaultFileName
+  if (disposition) {
+    const match = disposition.match(/filename="?([^";\n]+)"?/)
+    if (match) fileName = match[1]
+  }
+ 
+  // Convert response to blob and trigger browser download
+  const blob = await res.blob()
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href     = url
+  a.download = fileName
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+ 
+  return fileName
 }

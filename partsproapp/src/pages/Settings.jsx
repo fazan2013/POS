@@ -3,17 +3,48 @@
 // ================================================
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
+/*import {
   IconUser, IconBuildingStore, IconBell, IconShield,
   IconPalette, IconReceipt, IconDatabase, IconDeviceFloppy,
   IconCheck, IconEye, IconEyeOff, IconUpload, IconTrash,
   IconAlertTriangle, IconMoon, IconSun, IconLogout,
-  IconX, IconRefresh
+  IconX, IconRefresh,IconPackage
+} from '@tabler/icons-react'*/
+import {
+  IconUser,
+  IconBuildingStore,
+  IconBell,
+  IconShield,
+  IconPalette,
+  IconReceipt,
+  IconDatabase,
+  IconDeviceFloppy,
+  IconCheck,
+  IconEye,
+  IconEyeOff,
+  IconUpload,
+  IconTrash,
+  IconAlertTriangle,
+  IconMoon,
+  IconSun,
+  IconLogout,
+  IconX,
+  IconPackage,
+  IconShoppingCart,
+  IconTruck,
+  IconDownload,
+  IconRefresh,
 } from '@tabler/icons-react'
+
 import { getUser, clearSession } from '../services/api'
 import { profileApi } from '../services/api'
 import { storeApi } from '../services/api'
 import { receiptApi } from '../services/api'
+import { notifApi } from '../services/api'
+import { appearanceApi } from '../services/api'
+import { exportApi } from '../services/api'
+
+
 
 // ── API calls for profile ─────────────────────────
 // Add these endpoints to your api.js:
@@ -267,79 +298,100 @@ function ProfileTab({ onToast }) {
   }
 
   // ── Remove image ──────────────────────────────
+  
   async function handleRemoveImage() {
-    if (!confirm('Remove your profile photo?')) return
-    setRemovingImg(true)
-    try {
-      await profileApi.removeImage()
-      setImagePreview(null)
-      setPendingImage(null)
-      setProfileData(p => p ? { ...p, profileImage: null } : p)
-
-      // Update localStorage
-      const stored = getUser()
-      localStorage.setItem('pp_user', JSON.stringify({
-        ...stored, profileImage: null
-      }))
-
-      onToast('Profile photo removed', 'success')
-    } catch (err) {
-      onToast(err.message || 'Failed to remove photo', 'error')
-    } finally {
-      setRemovingImg(false)
-    }
+  if (!confirm('Remove your profile photo?')) return
+  setRemovingImg(true)
+  try {
+    await profileApi.removeImage()
+ 
+    setImagePreview(null)
+    setPendingImage(null)
+    setProfileData(p => p ? { ...p, profileImage: null } : p)
+ 
+    // ── Remove from localStorage too ─────────────
+    const currentStored = JSON.parse(localStorage.getItem('pp_user') || '{}')
+    localStorage.setItem('pp_user', JSON.stringify({
+      ...currentStored,
+      profileImage: null,
+    }))
+ 
+    onToast('Profile photo removed', 'success')
+  } catch (err) {
+    onToast(err.message || 'Failed to remove photo', 'error')
+  } finally {
+    setRemovingImg(false)
   }
+}
+
 
   // ── Save profile (text + image together) ──────
   async function handleSave() {
-    const firstName = firstNameRef.current?.value?.trim() || ''
-    const lastName  = lastNameRef.current?.value?.trim()  || ''
-    const email     = emailRef.current?.value?.trim()     || ''
-    const phone     = phoneRef.current?.value?.trim()     || ''
-
-    // Validate
-    const e = {}
-    if (!firstName) e.firstName = 'First name is required'
-    if (!email)     e.email     = 'Email is required'
-    if (Object.keys(e).length) { setErrors(e); return }
-
-    setSaving(true)
-    try {
-      // 1️⃣ Upload image first if user picked one
-      let savedImageUrl = profileData?.profileImage || null
-      if (pendingImage) {
-        savedImageUrl = await uploadImage(pendingImage.base64, pendingImage.mimeType)
+  const firstName = firstNameRef.current?.value?.trim() || ''
+  const lastName  = lastNameRef.current?.value?.trim()  || ''
+  const email     = emailRef.current?.value?.trim()     || ''
+  const phone     = phoneRef.current?.value?.trim()     || ''
+ 
+  const e = {}
+  if (!firstName) e.firstName = 'First name is required'
+  if (!email)     e.email     = 'Email is required'
+  if (Object.keys(e).length) { setErrors(e); return }
+ 
+  setSaving(true)
+  try {
+    // ── Step 1: Upload image if user picked one ──
+    let finalImageUrl = profileData?.profileImage || null
+ 
+    if (pendingImage) {
+      try {
+        const imgRes = await profileApi.uploadImage({
+          imageBase64: pendingImage.base64,
+          mimeType:    pendingImage.mimeType,
+        })
+        // imgRes = { message: "...", profileImage: "data:image/jpeg;base64,..." }
+        finalImageUrl = imgRes.profileImage
         setPendingImage(null)
+        setImagePreview(finalImageUrl)
+      } catch (imgErr) {
+        onToast('Image upload failed: ' + imgErr.message, 'error')
+        setSaving(false)
+        return
       }
-
-      // 2️⃣ Save profile text fields
-      const res = await profileApi.updateProfile({
-        fullName: `${firstName} ${lastName}`.trim(),
-        email,
-        phone: phone || null,
-      })
-
-      // 3️⃣ Update local state
-      const updatedProfile = { ...res.profile, profileImage: savedImageUrl }
-      setProfileData(updatedProfile)
-      setImagePreview(savedImageUrl)
-
-      // 4️⃣ Update localStorage so sidebar shows new name/image
-      localStorage.setItem('pp_user', JSON.stringify({
-        ...currentUser,
-        fullName:     updatedProfile.fullName,
-        email:        updatedProfile.email,
-        profileImage: savedImageUrl,
-      }))
-
-      onToast('Profile saved successfully', 'success')
-
-    } catch (err) {
-      onToast(err.message || 'Failed to save profile', 'error')
-    } finally {
-      setSaving(false)
     }
+ 
+    // ── Step 2: Save profile text ────────────────
+    const profileRes = await profileApi.updateProfile({
+      fullName: `${firstName} ${lastName}`.trim(),
+      email,
+      phone: phone || null,
+    })
+    // profileRes = { message: "...", profile: { id, fullName, email, role, ... } }
+ 
+    const updatedProfile = profileRes.profile
+ 
+    // ── Step 3: Update local state ───────────────
+    setProfileData({ ...updatedProfile, profileImage: finalImageUrl })
+ 
+    // ── Step 4: CRITICAL — save to localStorage ──
+    // Must include profileImage or Layout won't show it
+    const currentStored = JSON.parse(localStorage.getItem('pp_user') || '{}')
+    const merged = {
+      ...currentStored,
+      fullName:     updatedProfile.fullName,
+      email:        updatedProfile.email,
+      role:         updatedProfile.role,
+      profileImage: finalImageUrl,   // ← this is what Layout reads
+    }
+    localStorage.setItem('pp_user', JSON.stringify(merged))
+ 
+    onToast('Profile saved successfully', 'success')
+ 
+  } catch (err) {
+    onToast(err.message || 'Failed to save profile', 'error')
+  } finally {
+    setSaving(false)
   }
+}
 
   if (loading) return <PageLoader />
 
@@ -1086,8 +1138,14 @@ function ReceiptTab({ onToast }) {
 // ════════════════════════════════════════════════
 // NOTIFICATIONS TAB
 // ════════════════════════════════════════════════
+
 function NotifTab({ onToast }) {
-  const thresholdRef = useRef(null)
+  // ── Threshold ref (uncontrolled input) ────────
+  const thresholdRef     = useRef(null)
+  const emailRef         = useRef(null)
+  const phoneRef         = useRef(null)
+ 
+  // ── Toggle states ─────────────────────────────
   const [lowStock,     setLowStock]     = useState(true)
   const [outOfStock,   setOutOfStock]   = useState(true)
   const [newOrder,     setNewOrder]     = useState(true)
@@ -1095,268 +1153,818 @@ function NotifTab({ onToast }) {
   const [weeklyReport, setWeeklyReport] = useState(true)
   const [emailNotif,   setEmailNotif]   = useState(true)
   const [smsNotif,     setSmsNotif]     = useState(false)
-  const [saving,       setSaving]       = useState(false)
-
+ 
+  // ── Page state ────────────────────────────────
+  const [loading, setLoading] = useState(true)
+  const [saving,  setSaving]  = useState(false)
+  const [errors,  setErrors]  = useState({})
+ 
+  // ── Load from API on mount ────────────────────
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const data = await notifApi.get()
+ 
+        // Set toggle states from DB
+        setLowStock(data.lowStockAlert)
+        setOutOfStock(data.outOfStockAlert)
+        setNewOrder(data.newOrderAlert)
+        setDailyReport(data.dailyReport)
+        setWeeklyReport(data.weeklyReport)
+        setEmailNotif(data.emailNotifications)
+        setSmsNotif(data.smsNotifications)
+ 
+        // Fill text inputs via refs
+        setTimeout(() => {
+          if (thresholdRef.current) thresholdRef.current.value = data.lowStockThreshold  ?? 10
+          if (emailRef.current)     emailRef.current.value     = data.notificationEmail  ?? ''
+          if (phoneRef.current)     phoneRef.current.value     = data.notificationPhone  ?? ''
+        }, 0)
+ 
+      } catch (err) {
+        onToast('Could not load notification settings: ' + err.message, 'error')
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+ 
+  function clearError(field) {
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }))
+  }
+ 
+  // ── Save to API ───────────────────────────────
   async function handleSave() {
+    const threshold = parseInt(thresholdRef.current?.value) || 10
+    const email     = emailRef.current?.value?.trim()       || ''
+    const phone     = phoneRef.current?.value?.trim()       || ''
+ 
+    // Validate
+    const e = {}
+    if (threshold < 1)     e.threshold = 'Threshold must be at least 1'
+    if (emailNotif && email && !email.includes('@'))
+      e.email = 'Enter a valid email address'
+    if (Object.keys(e).length) { setErrors(e); return }
+ 
     setSaving(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      onToast('Notification settings saved', 'success')
-    } catch {
-      onToast('Failed to save', 'error')
+      await notifApi.update({
+        lowStockAlert:      lowStock,
+        outOfStockAlert:    outOfStock,
+        lowStockThreshold:  threshold,
+        newOrderAlert:      newOrder,
+        dailyReport,
+        weeklyReport,
+        emailNotifications: emailNotif,
+        smsNotifications:   smsNotif,
+        notificationEmail:  email  || null,
+        notificationPhone:  phone  || null,
+      })
+      onToast('Notification settings saved successfully', 'success')
+    } catch (err) {
+      onToast(err.message || 'Failed to save settings', 'error')
     } finally {
       setSaving(false)
     }
   }
-
+ 
+  const iClass = (field) =>
+    `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none
+     transition-colors ${errors[field]
+       ? 'border-red-300 focus:border-red-400'
+       : 'border-gray-200 focus:border-blue-400'}`
+ 
+  if (loading) return <PageLoader />
+ 
   return (
     <Section
       title="Notifications"
-      subtitle="Control alerts and report emails"
+      subtitle="Control alerts, reports and delivery preferences"
       icon={<IconBell size={16} />}
     >
-      <div className="space-y-5">
+      <div className="space-y-6">
+ 
+        {/* ── Stock alerts ────────────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Stock alerts</p>
+                        tracking-wider mb-3">
+            Stock alerts
+          </p>
           <div className="border border-gray-100 rounded-xl p-4 space-y-0">
-            <Toggle checked={lowStock}   onChange={setLowStock}
-                    label="Low stock alert"
-                    sub="Alert when part drops below minimum" />
-            <Toggle checked={outOfStock} onChange={setOutOfStock}
-                    label="Out of stock alert"
-                    sub="Alert when a part reaches zero" />
+            <Toggle
+              checked={lowStock}
+              onChange={setLowStock}
+              label="Low stock alert"
+              sub="Alert when a part drops below the minimum quantity"
+            />
+            <Toggle
+              checked={outOfStock}
+              onChange={setOutOfStock}
+              label="Out of stock alert"
+              sub="Alert when a part reaches zero quantity"
+            />
           </div>
-          <div className="mt-3">
-            <Field label="Default low stock threshold"
-                   hint="Alert when any part drops below this quantity">
-              <input ref={thresholdRef} type="number" min="1"
-                     defaultValue="10"
-                     className="w-32 px-3 py-2.5 border border-gray-200
-                                rounded-lg text-sm focus:outline-none
-                                focus:border-blue-400" />
-            </Field>
-          </div>
+ 
+          {/* Threshold input — shown when either alert is on */}
+          {(lowStock || outOfStock) && (
+            <div className="mt-3">
+              <Field
+                label="Default low stock threshold"
+                hint="Alert when any part quantity drops below this number"
+                error={errors.threshold}
+              >
+                <div className="flex items-center gap-3">
+                  <input
+                    ref={thresholdRef}
+                    type="number"
+                    min="1"
+                    max="10000"
+                    onChange={() => clearError('threshold')}
+                    className={iClass('threshold') + ' w-36'}
+                  />
+                  <p className="text-xs text-gray-400">units</p>
+                </div>
+              </Field>
+            </div>
+          )}
         </div>
-
+ 
+        {/* ── Sales alerts ────────────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Sales alerts</p>
+                        tracking-wider mb-3">
+            Sales alerts
+          </p>
           <div className="border border-gray-100 rounded-xl p-4 space-y-0">
-            <Toggle checked={newOrder}     onChange={setNewOrder}
-                    label="New order notification"
-                    sub="Alert on every completed sale" />
-            <Toggle checked={dailyReport}  onChange={setDailyReport}
-                    label="Daily sales report"
-                    sub="Summary email at end of day" />
-            <Toggle checked={weeklyReport} onChange={setWeeklyReport}
-                    label="Weekly summary report"
-                    sub="Every Monday morning" />
+            <Toggle
+              checked={newOrder}
+              onChange={setNewOrder}
+              label="New order notification"
+              sub="Get notified on every completed POS sale"
+            />
+            <Toggle
+              checked={dailyReport}
+              onChange={setDailyReport}
+              label="Daily sales report"
+              sub="Receive a summary email at the end of each day"
+            />
+            <Toggle
+              checked={weeklyReport}
+              onChange={setWeeklyReport}
+              label="Weekly summary report"
+              sub="Receive a full report every Monday morning"
+            />
           </div>
         </div>
-
+ 
+        {/* ── Delivery method ─────────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Delivery method</p>
+                        tracking-wider mb-3">
+            Delivery method
+          </p>
           <div className="border border-gray-100 rounded-xl p-4 space-y-0">
-            <Toggle checked={emailNotif} onChange={setEmailNotif}
-                    label="Email notifications"
-                    sub="Send alerts to your registered email" />
-            <Toggle checked={smsNotif}   onChange={setSmsNotif}
-                    label="SMS notifications"
-                    sub="Send alerts via SMS" />
+            <Toggle
+              checked={emailNotif}
+              onChange={val => { setEmailNotif(val); if (!val) clearError('email') }}
+              label="Email notifications"
+              sub="Send all alerts and reports to an email address"
+            />
+            <Toggle
+              checked={smsNotif}
+              onChange={setSmsNotif}
+              label="SMS notifications"
+              sub="Send stock alerts via SMS to a phone number"
+            />
           </div>
+ 
+          {/* Email input — show when email notifications enabled */}
+          {emailNotif && (
+            <div className="mt-3">
+              <Field
+                label="Notification email"
+                hint="Alerts and reports will be sent to this address"
+                error={errors.email}
+              >
+                <input
+                  ref={emailRef}
+                  type="email"
+                  placeholder="alerts@yourstore.com"
+                  onChange={() => clearError('email')}
+                  className={iClass('email')}
+                />
+              </Field>
+            </div>
+          )}
+ 
+          {/* Phone input — show when SMS enabled */}
+          {smsNotif && (
+            <div className="mt-3">
+              <Field
+                label="SMS phone number"
+                hint="Stock alerts will be sent to this number"
+              >
+                <input
+                  ref={phoneRef}
+                  type="tel"
+                  placeholder="+94 77 123 4567"
+                  className={iClass('')}
+                />
+              </Field>
+            </div>
+          )}
         </div>
-
-        <SaveButton label="Save notification settings"
-                    saving={saving} onClick={handleSave} />
+ 
+        {/* ── Summary badge ────────────────────── */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            {
+              label: 'Stock alerts',
+              value: [lowStock && 'Low stock', outOfStock && 'Out of stock']
+                       .filter(Boolean).join(', ') || 'None',
+              color: (lowStock || outOfStock) ? 'text-green-600' : 'text-gray-400',
+              bg:    (lowStock || outOfStock) ? 'bg-green-50 border-green-100'
+                                              : 'bg-gray-50 border-gray-100'
+            },
+            {
+              label: 'Sales alerts',
+              value: [newOrder && 'Orders', dailyReport && 'Daily',
+                      weeklyReport && 'Weekly'].filter(Boolean).join(', ') || 'None',
+              color: (newOrder || dailyReport || weeklyReport)
+                       ? 'text-blue-600' : 'text-gray-400',
+              bg:    (newOrder || dailyReport || weeklyReport)
+                       ? 'bg-blue-50 border-blue-100' : 'bg-gray-50 border-gray-100'
+            },
+            {
+              label: 'Via',
+              value: [emailNotif && 'Email', smsNotif && 'SMS']
+                       .filter(Boolean).join(' + ') || 'None',
+              color: (emailNotif || smsNotif) ? 'text-purple-600' : 'text-gray-400',
+              bg:    (emailNotif || smsNotif)
+                       ? 'bg-purple-50 border-purple-100' : 'bg-gray-50 border-gray-100'
+            },
+          ].map(card => (
+            <div key={card.label}
+                 className={`border rounded-xl p-3 text-center ${card.bg}`}>
+              <p className={`text-xs font-medium truncate ${card.color}`}>
+                {card.value}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">{card.label}</p>
+            </div>
+          ))}
+        </div>
+ 
+        {/* ── Info note ───────────────────────── */}
+        <div className="flex items-start gap-2 px-3 py-3 bg-amber-50
+                        border border-amber-100 rounded-xl">
+          <IconBell size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-amber-700 leading-relaxed">
+            Email and SMS delivery require a notification service integration
+            (e.g. SendGrid, Twilio). Settings are saved — delivery activates
+            once the service is connected.
+          </p>
+        </div>
+ 
+        <SaveButton
+          label="Save notification settings"
+          saving={saving}
+          onClick={handleSave}
+        />
       </div>
     </Section>
   )
 }
 
+
 // ════════════════════════════════════════════════
 // APPEARANCE TAB
 // ════════════════════════════════════════════════
+
 function AppearanceTab({ onToast }) {
+  // ── State (all controlled — no text inputs here) ──
   const [theme,    setTheme]    = useState('light')
+  const [accent,   setAccent]   = useState('#0f172a')
   const [density,  setDensity]  = useState('comfortable')
   const [fontSize, setFontSize] = useState('medium')
-  const [accent,   setAccent]   = useState('#0f172a')
+ 
+  const [loading,  setLoading]  = useState(true)
   const [saving,   setSaving]   = useState(false)
-
-  const accents = ['#0f172a','#3b82f6','#22c55e','#a855f7','#ef4444','#f59e0b']
-
+  const [lastSaved, setLastSaved] = useState(null)
+ 
+  const ACCENTS = [
+    { color: '#0f172a', label: 'Slate'   },
+    { color: '#3b82f6', label: 'Blue'    },
+    { color: '#22c55e', label: 'Green'   },
+    { color: '#a855f7', label: 'Purple'  },
+    { color: '#ef4444', label: 'Red'     },
+    { color: '#f59e0b', label: 'Amber'   },
+    { color: '#ec4899', label: 'Pink'    },
+    { color: '#14b8a6', label: 'Teal'    },
+  ]
+ 
+  // ── Load from API on mount ─────────────────────
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      try {
+        const data = await appearanceApi.get()
+        setTheme(data.theme       || 'light')
+        setAccent(data.accent     || '#0f172a')
+        setDensity(data.density   || 'comfortable')
+        setFontSize(data.fontSize || 'medium')
+        setLastSaved(data.updatedAt)
+      } catch (err) {
+        // Use localStorage cache silently
+        const cached = localStorage.getItem('pp_appearance')
+        if (cached) {
+          try {
+            const p = JSON.parse(cached)
+            setTheme(p.theme       || 'light')
+            setAccent(p.accent     || '#0f172a')
+            setDensity(p.density   || 'comfortable')
+            setFontSize(p.fontSize || 'medium')
+          } catch {}
+        }
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+ 
+  // ── Apply changes instantly as user picks ──────
+  function applyToDOM(newTheme, newAccent, newDensity, newFontSize) {
+    const root = document.documentElement
+    root.setAttribute('data-theme', newTheme)
+    newTheme === 'dark'
+      ? root.classList.add('dark')
+      : root.classList.remove('dark')
+ 
+    root.style.setProperty('--color-accent', newAccent)
+ 
+    const fontMap    = { small: '13px', medium: '14px', large: '15px' }
+    const densityMap = { compact: '8px', comfortable: '14px', spacious: '20px' }
+    root.style.setProperty('--font-size-base', fontMap[newFontSize]   || '14px')
+    root.style.setProperty('--row-padding',    densityMap[newDensity] || '14px')
+ 
+    // Cache immediately so it survives refresh
+    localStorage.setItem('pp_appearance', JSON.stringify({
+      theme: newTheme, accent: newAccent,
+      density: newDensity, fontSize: newFontSize
+    }))
+  }
+ 
+  function handleTheme(val) {
+    setTheme(val)
+    applyToDOM(val, accent, density, fontSize)
+  }
+ 
+  function handleAccent(val) {
+    setAccent(val)
+    applyToDOM(theme, val, density, fontSize)
+  }
+ 
+  function handleDensity(val) {
+    setDensity(val)
+    applyToDOM(theme, accent, val, fontSize)
+  }
+ 
+  function handleFontSize(val) {
+    setFontSize(val)
+    applyToDOM(theme, accent, density, val)
+  }
+ 
+  // ── Save to API ─────────────────────────────────
   async function handleSave() {
     setSaving(true)
     try {
-      await new Promise(r => setTimeout(r, 600))
-      onToast('Appearance saved', 'success')
-    } catch {
-      onToast('Failed to save', 'error')
+      const res = await appearanceApi.update({
+        theme,
+        accent,
+        density,
+        fontSize,
+      })
+      setLastSaved(res.settings?.updatedAt || new Date().toISOString())
+      onToast('Appearance saved successfully', 'success')
+    } catch (err) {
+      onToast(err.message || 'Failed to save appearance', 'error')
     } finally {
       setSaving(false)
     }
   }
-
+ 
+  // ── Reset to defaults ──────────────────────────
+  function handleReset() {
+    setTheme('light')
+    setAccent('#0f172a')
+    setDensity('comfortable')
+    setFontSize('medium')
+    applyToDOM('light', '#0f172a', 'comfortable', 'medium')
+    onToast('Reset to defaults — click Save to keep', 'success')
+  }
+ 
+  if (loading) return <PageLoader />
+ 
   return (
     <Section
       title="Appearance"
-      subtitle="Customize how PartsPro looks"
+      subtitle="Customize how PartsPro looks for your account"
       icon={<IconPalette size={16} />}
     >
       <div className="space-y-6">
-        {/* Theme */}
+ 
+        {/* ── Theme ───────────────────────────── */}
         <div>
-          <p className="text-xs font-medium text-gray-500 uppercase
-                        tracking-wider mb-3">Theme</p>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Theme
+          </p>
           <div className="grid grid-cols-2 gap-3">
             {[
-              { key: 'light', label: 'Light', icon: <IconSun size={18} />,  desc: 'Clean white interface' },
-              { key: 'dark',  label: 'Dark',  icon: <IconMoon size={18} />, desc: 'Easy on the eyes'      },
+              {
+                key:   'light',
+                label: 'Light mode',
+                icon:  <IconSun size={20} />,
+                desc:  'Clean white interface',
+                bg:    'bg-white',
+                preview: (
+                  <div className="flex gap-1 mt-2">
+                    <div className="w-3 h-3 rounded-sm bg-slate-900" />
+                    <div className="w-3 h-3 rounded-sm bg-gray-200" />
+                    <div className="w-3 h-3 rounded-sm bg-gray-100" />
+                  </div>
+                )
+              },
+              {
+                key:   'dark',
+                label: 'Dark mode',
+                icon:  <IconMoon size={20} />,
+                desc:  'Easy on the eyes',
+                bg:    'bg-slate-900',
+                preview: (
+                  <div className="flex gap-1 mt-2">
+                    <div className="w-3 h-3 rounded-sm bg-white" />
+                    <div className="w-3 h-3 rounded-sm bg-slate-600" />
+                    <div className="w-3 h-3 rounded-sm bg-slate-700" />
+                  </div>
+                )
+              },
             ].map(t => (
-              <button key={t.key} type="button" onClick={() => setTheme(t.key)}
-                      className={`flex items-center gap-3 p-4 rounded-xl
-                                  border-2 text-left transition-all
-                        ${theme === t.key
-                          ? 'border-slate-900 bg-slate-50'
-                          : 'border-gray-200 hover:border-gray-300'}`}>
-                <span className={theme === t.key ? 'text-slate-900' : 'text-gray-400'}>
-                  {t.icon}
-                </span>
-                <div>
-                  <p className={`text-sm font-medium
-                    ${theme === t.key ? 'text-slate-900' : 'text-gray-600'}`}>
-                    {t.label}
-                  </p>
-                  <p className="text-xs text-gray-400">{t.desc}</p>
+              <button
+                key={t.key}
+                type="button"
+                onClick={() => handleTheme(t.key)}
+                className={`relative p-4 rounded-xl border-2 text-left
+                            transition-all overflow-hidden
+                            ${theme === t.key
+                              ? 'border-blue-400 ring-2 ring-blue-100'
+                              : 'border-gray-200 hover:border-gray-300'}`}
+              >
+                {/* Mini UI preview */}
+                <div className={`w-full h-12 rounded-lg mb-3 flex
+                                 items-center justify-center ${t.bg}
+                                 border border-gray-100`}>
+                  <span className={theme === t.key
+                    ? 'text-blue-500' : 'text-gray-400'}>
+                    {t.icon}
+                  </span>
                 </div>
-                {theme === t.key && (
-                  <IconCheck size={14} className="text-slate-900 ml-auto" />
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className={`text-sm font-medium
+                      ${theme === t.key ? 'text-gray-900' : 'text-gray-600'}`}>
+                      {t.label}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">{t.desc}</p>
+                  </div>
+                  {theme === t.key && (
+                    <div className="w-5 h-5 rounded-full bg-blue-500
+                                    flex items-center justify-center flex-shrink-0">
+                      <IconCheck size={11} className="text-white" />
+                    </div>
+                  )}
+                </div>
+                {t.preview}
+              </button>
+            ))}
+          </div>
+        </div>
+ 
+        {/* ── Accent Color ─────────────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Accent color
+          </p>
+          <div className="flex flex-wrap gap-3">
+            {ACCENTS.map(a => (
+              <button
+                key={a.color}
+                type="button"
+                title={a.label}
+                onClick={() => handleAccent(a.color)}
+                className={`relative w-9 h-9 rounded-full transition-all
+                            flex items-center justify-center
+                            ${accent === a.color
+                              ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                              : 'hover:scale-105'}`}
+                style={{ background: a.color }}
+              >
+                {accent === a.color && (
+                  <IconCheck size={14} className="text-white" />
+                )}
+              </button>
+            ))}
+ 
+            {/* Custom color picker */}
+            <div className="relative">
+              <label
+                className="w-9 h-9 rounded-full border-2 border-dashed
+                           border-gray-300 flex items-center justify-center
+                           cursor-pointer hover:border-gray-400 transition-colors
+                           text-gray-400 hover:text-gray-600"
+                title="Custom color"
+              >
+                <span className="text-lg leading-none">+</span>
+                <input
+                  type="color"
+                  value={accent}
+                  onChange={e => handleAccent(e.target.value)}
+                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                />
+              </label>
+            </div>
+          </div>
+ 
+          {/* Color preview pill */}
+          <div className="mt-3 flex items-center gap-2">
+            <div className="w-5 h-5 rounded-full border border-gray-200 flex-shrink-0"
+                 style={{ background: accent }} />
+            <span className="text-xs text-gray-500 font-mono">{accent}</span>
+          </div>
+        </div>
+ 
+        {/* ── Table Density ─────────────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Table density
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { key: 'compact',     label: 'Compact',     desc: 'More rows visible',      rows: 3 },
+              { key: 'comfortable', label: 'Comfortable', desc: 'Balanced spacing',        rows: 2 },
+              { key: 'spacious',    label: 'Spacious',    desc: 'Easier to read',          rows: 1 },
+            ].map(d => (
+              <button
+                key={d.key}
+                type="button"
+                onClick={() => handleDensity(d.key)}
+                className={`p-3 rounded-xl border-2 text-left transition-all
+                            ${density === d.key
+                              ? 'border-blue-400 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300'}`}
+              >
+                {/* Mini row preview */}
+                <div className="space-y-1 mb-3">
+                  {Array.from({ length: d.rows + 1 }).map((_, i) => (
+                    <div key={i} className={`w-full rounded flex gap-1
+                      ${density === d.key ? 'opacity-100' : 'opacity-40'}`}>
+                      <div className="h-1.5 w-4 rounded bg-gray-300" />
+                      <div className="h-1.5 flex-1 rounded bg-gray-200" />
+                      <div className="h-1.5 w-6 rounded bg-gray-200" />
+                    </div>
+                  ))}
+                </div>
+                <p className={`text-xs font-medium
+                  ${density === d.key ? 'text-blue-700' : 'text-gray-700'}`}>
+                  {d.label}
+                </p>
+                <p className="text-[10px] text-gray-400 mt-0.5">{d.desc}</p>
+                {density === d.key && (
+                  <div className="mt-1.5 flex items-center gap-1 text-[10px]
+                                  font-medium text-blue-500">
+                    <IconCheck size={10} /> Selected
+                  </div>
                 )}
               </button>
             ))}
           </div>
         </div>
-
-        {/* Accent color */}
+ 
+        {/* ── Font Size ─────────────────────────── */}
         <div>
-          <p className="text-xs font-medium text-gray-500 uppercase
-                        tracking-wider mb-3">Accent color</p>
-          <div className="flex gap-3">
-            {accents.map(color => (
-              <button key={color} type="button" onClick={() => setAccent(color)}
-                      className={`w-8 h-8 rounded-full border-2 transition-all
-                        ${accent === color
-                          ? 'border-gray-400 scale-110'
-                          : 'border-transparent hover:scale-105'}`}
-                      style={{ background: color }} />
-            ))}
-          </div>
-        </div>
-
-        {/* Density */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase
-                        tracking-wider mb-3">Table density</p>
-          <div className="flex gap-2">
-            {['compact', 'comfortable', 'spacious'].map(d => (
-              <button key={d} type="button" onClick={() => setDensity(d)}
-                      className={`flex-1 py-2.5 rounded-xl border text-xs
-                                  font-medium transition-all capitalize
-                        ${density === d
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                {d}
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Font size
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { key: 'small',  label: 'Small',  size: 'text-xs',  px: '13px' },
+              { key: 'medium', label: 'Medium', size: 'text-sm',  px: '14px' },
+              { key: 'large',  label: 'Large',  size: 'text-base',px: '15px' },
+            ].map(f => (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => handleFontSize(f.key)}
+                className={`p-3 rounded-xl border-2 text-left transition-all
+                            ${fontSize === f.key
+                              ? 'border-blue-400 bg-blue-50'
+                              : 'border-gray-200 hover:border-gray-300'}`}
+              >
+                <p className={`font-medium mb-1
+                  ${f.size}
+                  ${fontSize === f.key ? 'text-blue-700' : 'text-gray-700'}`}>
+                  Aa
+                </p>
+                <p className={`text-xs font-medium
+                  ${fontSize === f.key ? 'text-blue-700' : 'text-gray-700'}`}>
+                  {f.label}
+                </p>
+                <p className="text-[10px] text-gray-400">{f.px}</p>
               </button>
             ))}
           </div>
         </div>
-
-        {/* Font size */}
-        <div>
-          <p className="text-xs font-medium text-gray-500 uppercase
-                        tracking-wider mb-3">Font size</p>
-          <div className="flex gap-2">
-            {['small', 'medium', 'large'].map(f => (
-              <button key={f} type="button" onClick={() => setFontSize(f)}
-                      className={`flex-1 py-2.5 rounded-xl border text-xs
-                                  font-medium transition-all capitalize
-                        ${fontSize === f
-                          ? 'bg-slate-900 text-white border-slate-900'
-                          : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}>
-                {f}
-              </button>
-            ))}
-          </div>
+ 
+        {/* ── Last saved ──────────────────────── */}
+        {lastSaved && (
+          <p className="text-[10px] text-gray-400 text-right">
+            Last saved: {new Date(lastSaved).toLocaleString()}
+          </p>
+        )}
+ 
+        {/* ── Actions ─────────────────────────── */}
+        <div className="flex items-center justify-between pt-1">
+          <button
+            type="button"
+            onClick={handleReset}
+            className="flex items-center gap-1.5 px-3 py-2 border
+                       border-gray-200 rounded-lg text-xs text-gray-500
+                       hover:border-gray-300 hover:text-gray-700
+                       transition-colors"
+          >
+            <IconRefresh size={13} /> Reset to defaults
+          </button>
+ 
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={saving}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl
+                        text-sm font-medium transition-colors
+                        ${saving
+                          ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                          : 'bg-slate-900 text-white hover:bg-slate-700'}`}
+          >
+            {saving
+              ? <><span className="w-4 h-4 border-2 border-white/30
+                                   border-t-white rounded-full animate-spin" />
+                  Saving…</>
+              : <><IconDeviceFloppy size={15} /> Save appearance</>}
+          </button>
         </div>
-
-        <SaveButton label="Save appearance" saving={saving} onClick={handleSave} />
       </div>
     </Section>
   )
 }
 
+
 // ════════════════════════════════════════════════
 // SECURITY TAB
 // ════════════════════════════════════════════════
+
 function SecurityTab({ onToast }) {
+  const navigate = useNavigate()
+  const currentUser = getUser()
+ 
+  // ── Password refs ─────────────────────────────
   const currentRef = useRef(null)
   const newPassRef = useRef(null)
   const confirmRef = useRef(null)
-
-  const [showPw, setShowPw]   = useState({ current: false, new: false, confirm: false })
-  const [twoFa,  setTwoFa]    = useState(false)
-  const [alerts, setAlerts]   = useState(true)
-  const [saving, setSaving]   = useState(false)
-  const [errors, setErrors]   = useState({})
-
+ 
+  // ── Toggle state ──────────────────────────────
+  const [showPw,  setShowPw]  = useState({ current: false, new: false, confirm: false })
+  const [twoFa,   setTwoFa]   = useState(false)
+  const [alerts,  setAlerts]  = useState(true)
+ 
+  // ── Save state ────────────────────────────────
+  const [saving,  setSaving]  = useState(false)
+  const [errors,  setErrors]  = useState({})
+ 
+  // ── Password strength ─────────────────────────
+  const [strength, setStrength] = useState(null) // null | weak | fair | strong
+ 
   function toggleShow(field) {
     setShowPw(p => ({ ...p, [field]: !p[field] }))
   }
-
-  async function handleSave() {
-  const current = currentRef.current?.value || ''
-  const newPass = newPassRef.current?.value || ''
-  const confirm = confirmRef.current?.value || ''
-
-  const e = {}
-  if (!current)            e.current = 'Enter your current password'
-  if (newPass.length < 8)  e.newPass = 'Minimum 8 characters'
-  if (newPass !== confirm)  e.confirm = 'Passwords do not match'
-  if (Object.keys(e).length) { setErrors(e); return }
-
-  setSaving(true)
-  try {
-    // ── Call real API ───────────────────────────
-    await profileApi.changePassword({
-      currentPassword: current,
-      newPassword:     newPass,
-      confirmPassword: confirm,
-    })
-
-    // Clear fields
-    if (currentRef.current) currentRef.current.value = ''
-    if (newPassRef.current)  newPassRef.current.value  = ''
-    if (confirmRef.current)  confirmRef.current.value  = ''
-    setErrors({})
-
-    onToast('Password changed. Please log in again.', 'success')
-
-    // Force re-login after password change
-    setTimeout(() => {
-      clearSession()
-      window.location.href = '/login'
-    }, 2000)
-
-  } catch (err) {
-    onToast(err.message || 'Failed to change password', 'error')
-  } finally {
-    setSaving(false)
+ 
+  function clearError(field) {
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }))
   }
-}
-
-  function PwField({ label, fieldKey, refObj }) {
+ 
+  // ── Check password strength live ──────────────
+  function checkStrength(val) {
+    if (!val) { setStrength(null); return }
+    let score = 0
+    if (val.length >= 8)                    score++
+    if (val.length >= 12)                   score++
+    if (/[A-Z]/.test(val))                  score++
+    if (/[0-9]/.test(val))                  score++
+    if (/[^A-Za-z0-9]/.test(val))           score++
+    if      (score <= 1) setStrength('weak')
+    else if (score <= 3) setStrength('fair')
+    else                 setStrength('strong')
+  }
+ 
+  // ── Change password → POST /api/auth/change-password ──
+  async function handleChangePassword() {
+    const current = currentRef.current?.value || ''
+    const newPass = newPassRef.current?.value || ''
+    const confirm = confirmRef.current?.value || ''
+ 
+    // Validate
+    const e = {}
+    if (!current)            e.current = 'Enter your current password'
+    if (newPass.length < 8)  e.newPass = 'Minimum 8 characters required'
+    if (newPass !== confirm)  e.confirm = 'Passwords do not match'
+    if (newPass && newPass === current)
+                             e.newPass = 'New password must differ from current'
+    if (Object.keys(e).length) { setErrors(e); return }
+ 
+    setSaving(true)
+    try {
+      await profileApi.changePassword({
+        currentPassword: current,
+        newPassword:     newPass,
+        confirmPassword: confirm,
+      })
+ 
+      // Clear all fields
+      if (currentRef.current) currentRef.current.value = ''
+      if (newPassRef.current)  newPassRef.current.value = ''
+      if (confirmRef.current)  confirmRef.current.value = ''
+      setErrors({})
+      setStrength(null)
+ 
+      onToast('Password changed! Logging you out…', 'success')
+ 
+      // Force re-login — old token should no longer be trusted
+      setTimeout(() => {
+        clearSession()
+        navigate('/login')
+      }, 2000)
+ 
+    } catch (err) {
+      // Show specific error from backend
+      const msg = err.message || 'Failed to change password'
+      if (msg.toLowerCase().includes('current'))
+        setErrors({ current: msg })
+      else if (msg.toLowerCase().includes('new'))
+        setErrors({ newPass: msg })
+      else
+        onToast(msg, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+ 
+  // ── Sign out all sessions ─────────────────────
+  function handleSignOutAll() {
+    if (!confirm('This will log you out of all devices. Continue?')) return
+    clearSession()
+    navigate('/login')
+  }
+ 
+  // ── Strength bar ──────────────────────────────
+  function StrengthBar() {
+    if (!strength) return null
+    const config = {
+      weak:   { width: 'w-1/3', color: 'bg-red-400',   label: 'Weak'   },
+      fair:   { width: 'w-2/3', color: 'bg-amber-400', label: 'Fair'   },
+      strong: { width: 'w-full', color: 'bg-green-500', label: 'Strong' },
+    }[strength]
+ 
+    return (
+      <div className="mt-1.5">
+        <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all ${config.width} ${config.color}`} />
+        </div>
+        <p className={`text-[10px] mt-1 font-medium
+          ${strength === 'weak'   ? 'text-red-400'
+          : strength === 'fair'   ? 'text-amber-500'
+          : 'text-green-600'}`}>
+          {config.label} password
+        </p>
+      </div>
+    )
+  }
+ 
+  // ── Password field ────────────────────────────
+  function PwField({ label, fieldKey, refObj, onChange }) {
     return (
       <Field label={label} error={errors[fieldKey]}>
         <div className="relative">
@@ -1364,7 +1972,11 @@ function SecurityTab({ onToast }) {
             ref={refObj}
             type={showPw[fieldKey] ? 'text' : 'password'}
             placeholder="••••••••"
-            onChange={() => setErrors(p => ({ ...p, [fieldKey]: null }))}
+            autoComplete={fieldKey === 'current' ? 'current-password' : 'new-password'}
+            onChange={e => {
+              clearError(fieldKey)
+              if (onChange) onChange(e.target.value)
+            }}
             className={`w-full px-3 py-2.5 pr-10 border rounded-lg text-sm
                         focus:outline-none transition-colors
                         ${errors[fieldKey]
@@ -1375,7 +1987,7 @@ function SecurityTab({ onToast }) {
             type="button"
             onClick={() => toggleShow(fieldKey)}
             className="absolute right-3 top-1/2 -translate-y-1/2
-                       text-gray-400 hover:text-gray-600"
+                       text-gray-400 hover:text-gray-600 transition-colors"
           >
             {showPw[fieldKey]
               ? <IconEyeOff size={15} />
@@ -1385,26 +1997,87 @@ function SecurityTab({ onToast }) {
       </Field>
     )
   }
-
+ 
   return (
     <Section
       title="Security"
-      subtitle="Password and account security settings"
+      subtitle="Manage your password and account security"
       icon={<IconShield size={16} />}
     >
-      <div className="space-y-6">
-        {/* Change password */}
+      <div className="space-y-7">
+ 
+        {/* ── Logged in as banner ──────────────── */}
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-green-50
+                        border border-green-100 rounded-lg">
+          <IconShield size={14} className="text-green-500 flex-shrink-0" />
+          <div>
+            <p className="text-xs font-medium text-green-800">
+              Active session — {currentUser?.fullName || 'Unknown'}
+            </p>
+            <p className="text-[10px] text-green-600">
+              {currentUser?.email} · Role: {currentUser?.role}
+            </p>
+          </div>
+        </div>
+ 
+        {/* ── Change password ──────────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-4">Change password</p>
+                        tracking-wider mb-4">
+            Change password
+          </p>
+ 
           <div className="space-y-4">
-            <PwField label="Current password" fieldKey="current" refObj={currentRef} />
-            <PwField label="New password"     fieldKey="newPass" refObj={newPassRef} />
-            <PwField label="Confirm new password" fieldKey="confirm" refObj={confirmRef} />
+            <PwField
+              label="Current password"
+              fieldKey="current"
+              refObj={currentRef}
+            />
+ 
+            <div>
+              <PwField
+                label="New password"
+                fieldKey="newPass"
+                refObj={newPassRef}
+                onChange={checkStrength}
+              />
+              <StrengthBar />
+            </div>
+ 
+            <PwField
+              label="Confirm new password"
+              fieldKey="confirm"
+              refObj={confirmRef}
+            />
+ 
+            {/* Password rules */}
+            <div className="bg-gray-50 border border-gray-100 rounded-xl p-3">
+              <p className="text-[10px] font-medium text-gray-500
+                            uppercase tracking-wider mb-2">
+                Password requirements
+              </p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {[
+                  'Minimum 8 characters',
+                  'At least one uppercase letter',
+                  'At least one number',
+                  'Different from current password',
+                ].map(rule => (
+                  <div key={rule}
+                       className="flex items-center gap-1.5 text-[10px]
+                                  text-gray-500">
+                    <span className="w-1 h-1 rounded-full bg-gray-300
+                                     flex-shrink-0" />
+                    {rule}
+                  </div>
+                ))}
+              </div>
+            </div>
+ 
             <div className="flex justify-end">
               <button
                 type="button"
-                onClick={handleSave}
+                onClick={handleChangePassword}
                 disabled={saving}
                 className={`flex items-center gap-2 px-5 py-2.5 rounded-xl
                             text-sm font-medium transition-colors
@@ -1413,191 +2086,482 @@ function SecurityTab({ onToast }) {
                               : 'bg-slate-900 text-white hover:bg-slate-700'}`}
               >
                 {saving
-                  ? <><Spinner /> Saving…</>
+                  ? <><span className="w-4 h-4 border-2 border-white/30
+                                       border-t-white rounded-full
+                                       animate-spin" /> Saving…</>
                   : <><IconShield size={15} /> Update password</>}
               </button>
             </div>
           </div>
         </div>
-
-        {/* Security options */}
+ 
+        {/* ── Security preferences ─────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Security options</p>
+                        tracking-wider mb-3">
+            Security preferences
+          </p>
           <div className="border border-gray-100 rounded-xl p-4 space-y-0">
-            <Toggle checked={twoFa}  onChange={setTwoFa}
-                    label="Two-factor authentication"
-                    sub="Add an extra layer of security" />
-            <Toggle checked={alerts} onChange={setAlerts}
-                    label="Active session alerts"
-                    sub="Get notified when someone logs in" />
+            <Toggle
+              checked={twoFa}
+              onChange={setTwoFa}
+              label="Two-factor authentication"
+              sub="Add an extra layer of security on login (coming soon)"
+            />
+            <Toggle
+              checked={alerts}
+              onChange={setAlerts}
+              label="Login alerts"
+              sub="Get notified when someone logs into your account"
+            />
           </div>
         </div>
-
-        {/* Danger zone */}
+ 
+        {/* ── Active session info ──────────────── */}
+        <div>
+          <p className="text-xs font-medium text-gray-400 uppercase
+                        tracking-wider mb-3">
+            Active sessions
+          </p>
+          <div className="border border-gray-100 rounded-xl overflow-hidden">
+            {/* Current session row */}
+            <div className="flex items-center justify-between px-4 py-3
+                            border-b border-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center
+                                justify-center flex-shrink-0">
+                  <span className="text-green-600 text-xs font-bold">W</span>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-gray-900">
+                    Web browser — current session
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    Signed in · JWT expires in 8 hours
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] bg-green-100 text-green-700
+                               px-2 py-0.5 rounded-full font-medium">
+                Active
+              </span>
+            </div>
+ 
+            {/* Sign out all row */}
+            <div className="flex items-center justify-between px-4 py-3">
+              <div>
+                <p className="text-xs text-gray-700">Sign out of all devices</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">
+                  Clears your token and redirects to login
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOutAll}
+                className="flex items-center gap-1.5 px-3 py-2 border
+                           border-red-200 rounded-lg text-xs text-red-500
+                           hover:bg-red-50 transition-colors"
+              >
+                <IconLogout size={13} /> Sign out all
+              </button>
+            </div>
+          </div>
+        </div>
+ 
+        {/* ── Danger zone ──────────────────────── */}
         <div className="border border-red-100 rounded-xl p-4">
           <p className="text-xs font-medium text-red-400 uppercase
-                        tracking-wider mb-3">Danger zone</p>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-800">Sign out of all devices</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Logs out all active sessions
-              </p>
+                        tracking-wider mb-3">
+            Danger zone
+          </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-800">Delete my account</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Permanently remove your account — contact your admin
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onToast(
+                  'Account deletion must be done by an Administrator', 'error'
+                )}
+                className="flex items-center gap-1.5 px-3 py-2 border
+                           border-red-200 rounded-lg text-xs text-red-400
+                           hover:bg-red-50 transition-colors"
+              >
+                <IconTrash size={13} /> Delete account
+              </button>
             </div>
-            <button
-              type="button"
-              className="flex items-center gap-1.5 px-3 py-2 border
-                         border-red-200 rounded-lg text-xs text-red-500
-                         hover:bg-red-50 transition-colors"
-            >
-              <IconLogout size={13} /> Sign out all
-            </button>
           </div>
         </div>
+ 
       </div>
     </Section>
   )
 }
 
+
 // ════════════════════════════════════════════════
 // DATA & BACKUP TAB
 // ════════════════════════════════════════════════
 function DataTab({ onToast }) {
-  const [autoBackup,    setAutoBackup]    = useState(true)
-  const [backupFreq,    setBackupFreq]    = useState('Daily')
-  const [confirmReset,  setConfirmReset]  = useState(false)
-  const [saving,        setSaving]        = useState(false)
-
-  async function handleSave() {
-    setSaving(true)
+  const currentUser = getUser()
+  const isAdmin = currentUser?.role === 'Administrator'
+ 
+  // ── Summary state ─────────────────────────────
+  const [summary,      setSummary]      = useState(null)
+  const [loadingSummary, setLoadingSummary] = useState(true)
+ 
+  // ── Download loading states ───────────────────
+  const [downloading, setDownloading] = useState({
+    inventory: false,
+    orders:    false,
+    customers: false,
+    suppliers: false,
+    backup:    false,
+  })
+ 
+  // ── Backup settings state ─────────────────────
+  const [autoBackup,   setAutoBackup]   = useState(false)
+  const [backupFreq,   setBackupFreq]   = useState('Daily')
+  const [lastBackup,   setLastBackup]   = useState(null)
+  const [confirmReset, setConfirmReset] = useState(false)
+ 
+  // ── Load summary on mount ─────────────────────
+  useEffect(() => {
+    async function load() {
+      setLoadingSummary(true)
+      try {
+        const data = await exportApi.getSummary()
+        setSummary(data)
+        setLastBackup(data.exportedAt)
+      } catch (err) {
+        onToast('Could not load data summary: ' + err.message, 'error')
+      } finally {
+        setLoadingSummary(false)
+      }
+    }
+    load()
+  }, [])
+ 
+  // ── Generic download handler ──────────────────
+  async function handleDownload(type) {
+    setDownloading(p => ({ ...p, [type]: true }))
     try {
-      await new Promise(r => setTimeout(r, 600))
-      onToast('Backup settings saved', 'success')
-    } catch {
-      onToast('Failed to save', 'error')
+      const fnMap = {
+        inventory: exportApi.downloadInventory,
+        orders:    exportApi.downloadOrders,
+        customers: exportApi.downloadCustomers,
+        suppliers: exportApi.downloadSuppliers,
+        backup:    exportApi.downloadBackup,
+      }
+      const fileName = await fnMap[type]()
+      onToast(`Downloaded ${fileName}`, 'success')
+    } catch (err) {
+      onToast(err.message || `Failed to download ${type}`, 'error')
     } finally {
-      setSaving(false)
+      setDownloading(p => ({ ...p, [type]: false }))
     }
   }
-
+ 
+  // ── Export card data ──────────────────────────
+  const EXPORTS = [
+    {
+      key:   'inventory',
+      label: 'Export inventory',
+      desc:  'All active parts with prices and stock',
+      icon:  <IconPackage size={16} className="text-blue-500" />,
+      bg:    'bg-blue-50 border-blue-100',
+      count: summary?.partsCount,
+      unit:  'parts',
+      format:'CSV',
+    },
+    {
+      key:   'orders',
+      label: 'Export orders',
+      desc:  'All orders with totals and customer info',
+      icon:  <IconShoppingCart size={16} className="text-green-500" />,
+      bg:    'bg-green-50 border-green-100',
+      count: summary?.ordersCount,
+      unit:  'orders',
+      format:'CSV',
+    },
+    {
+      key:   'customers',
+      label: 'Export customers',
+      desc:  'Customer list with spending history',
+      icon:  <IconUser size={16} className="text-purple-500" />,
+      bg:    'bg-purple-50 border-purple-100',
+      count: summary?.customersCount,
+      unit:  'customers',
+      format:'CSV',
+    },
+    {
+      key:   'suppliers',
+      label: 'Export suppliers',
+      desc:  'Supplier list with contact details',
+      icon:  <IconTruck size={16} className="text-amber-500" />,
+      bg:    'bg-amber-50 border-amber-100',
+      count: summary?.suppliersCount,
+      unit:  'suppliers',
+      format:'CSV',
+    },
+  ]
+ 
   return (
     <Section
       title="Data & Backup"
-      subtitle="Export, backup and reset your data"
+      subtitle="Export your data and manage backups"
       icon={<IconDatabase size={16} />}
     >
-      <div className="space-y-6">
-        {/* Export buttons */}
+      <div className="space-y-7">
+ 
+        {/* ── Data summary ─────────────────────── */}
+        {loadingSummary ? (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {Array(4).fill(0).map((_, i) => (
+              <div key={i} className="bg-gray-50 border border-gray-100
+                                      rounded-xl p-4 animate-pulse">
+                <div className="h-3 bg-gray-200 rounded w-16 mb-3" />
+                <div className="h-6 bg-gray-200 rounded w-10" />
+              </div>
+            ))}
+          </div>
+        ) : summary && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: 'Parts',     value: summary.partsCount,     color: 'text-blue-600'   },
+              { label: 'Orders',    value: summary.ordersCount,    color: 'text-green-600'  },
+              { label: 'Customers', value: summary.customersCount, color: 'text-purple-600' },
+              { label: 'Suppliers', value: summary.suppliersCount, color: 'text-amber-600'  },
+            ].map(s => (
+              <div key={s.label}
+                   className="bg-white border border-gray-100 rounded-xl p-4">
+                <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">
+                  {s.label}
+                </p>
+                <p className={`text-2xl font-medium ${s.color}`}>{s.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+ 
+        {/* ── Export data ──────────────────────── */}
         <div>
           <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Export data</p>
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'Export inventory',  desc: 'All parts as CSV'     },
-              { label: 'Export orders',     desc: 'All orders as CSV'    },
-              { label: 'Export customers',  desc: 'Customer list as CSV' },
-              { label: 'Export suppliers',  desc: 'Supplier list as CSV' },
-            ].map(ex => (
-              <button key={ex.label} type="button"
-                      className="flex items-center gap-2.5 p-3 border
-                                 border-gray-200 rounded-xl text-left
-                                 hover:border-gray-300 hover:bg-gray-50
-                                 transition-colors">
-                <IconDatabase size={15} className="text-gray-400 flex-shrink-0" />
-                <div>
-                  <p className="text-xs font-medium text-gray-800">{ex.label}</p>
-                  <p className="text-[10px] text-gray-400">{ex.desc}</p>
+                        tracking-wider mb-3">
+            Export data
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {EXPORTS.map(ex => (
+              <div key={ex.key}
+                   className={`border rounded-xl p-4 ${ex.bg}`}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 bg-white rounded-lg flex items-center
+                                    justify-center shadow-sm">
+                      {ex.icon}
+                    </div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-900">
+                        {ex.label}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5">
+                        {ex.desc}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[9px] font-medium bg-white text-gray-500
+                                   px-1.5 py-0.5 rounded-full border border-gray-200">
+                    {ex.format}
+                  </span>
                 </div>
-              </button>
+ 
+                <div className="flex items-center justify-between">
+                  {ex.count !== undefined ? (
+                    <p className="text-xs text-gray-500">
+                      {ex.count.toLocaleString()} {ex.unit}
+                    </p>
+                  ) : (
+                    <div className="h-3 bg-gray-200 rounded w-16 animate-pulse" />
+                  )}
+ 
+                  <button
+                    type="button"
+                    onClick={() => handleDownload(ex.key)}
+                    disabled={downloading[ex.key]}
+                    className={`flex items-center gap-1.5 px-3 py-1.5
+                                rounded-lg text-xs font-medium transition-all
+                                border border-gray-200 bg-white
+                                ${downloading[ex.key]
+                                  ? 'opacity-50 cursor-not-allowed text-gray-400'
+                                  : 'text-gray-700 hover:border-gray-300 hover:bg-gray-50'}`}
+                  >
+                    {downloading[ex.key] ? (
+                      <><span className="w-3 h-3 border border-gray-300
+                                         border-t-gray-600 rounded-full
+                                         animate-spin" /> Downloading…</>
+                    ) : (
+                      <><IconDownload size={12} /> Download</>
+                    )}
+                  </button>
+                </div>
+              </div>
             ))}
           </div>
         </div>
-
-        {/* Auto backup */}
-        <div>
-          <p className="text-xs font-medium text-gray-400 uppercase
-                        tracking-wider mb-3">Auto backup</p>
-          <div className="border border-gray-100 rounded-xl p-4 space-y-3">
-            <Toggle checked={autoBackup} onChange={setAutoBackup}
-                    label="Enable automatic backup"
-                    sub="Automatically back up your data to cloud storage" />
-            {autoBackup && (
-              <Field label="Backup frequency">
-                <select
-                  value={backupFreq}
-                  onChange={e => setBackupFreq(e.target.value)}
-                  className="w-full px-3 py-2.5 border border-gray-200
-                             rounded-lg text-sm focus:outline-none
-                             focus:border-blue-400 bg-white appearance-none"
+ 
+        {/* ── Full backup (Admin only) ─────────── */}
+        {isAdmin && (
+          <div>
+            <p className="text-xs font-medium text-gray-400 uppercase
+                          tracking-wider mb-3">
+              Full backup
+            </p>
+            <div className="border border-gray-100 rounded-xl p-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-slate-100 rounded-xl
+                                  flex items-center justify-center flex-shrink-0">
+                    <IconDatabase size={18} className="text-slate-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      Full JSON backup
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      All inventory, orders, customers and suppliers in one file
+                    </p>
+                    {lastBackup && (
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        Last export: {new Date(lastBackup).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDownload('backup')}
+                  disabled={downloading.backup}
+                  className={`flex items-center gap-1.5 px-4 py-2.5
+                              rounded-xl text-xs font-medium transition-all
+                              ${downloading.backup
+                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                : 'bg-slate-900 text-white hover:bg-slate-700'}`}
                 >
-                  {['Daily','Weekly','Monthly'].map(f => (
-                    <option key={f}>{f}</option>
-                  ))}
-                </select>
-              </Field>
-            )}
-          </div>
-
-          {/* Last backup info */}
-          <div className="mt-3 flex justify-between items-center p-3
-                          bg-gray-50 border border-gray-100 rounded-xl">
-            <div>
-              <p className="text-xs font-medium text-gray-700">Last backup</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">
-                {new Date().toLocaleDateString()} at 03:00 AM
-              </p>
-            </div>
-            <button type="button"
-                    onClick={() => onToast('Backup started', 'success')}
-                    className="flex items-center gap-1.5 px-3 py-2 border
-                               border-gray-200 rounded-lg text-xs text-gray-600
-                               hover:border-gray-300 bg-white transition-colors">
-              <IconDatabase size={12} /> Backup now
-            </button>
-          </div>
-        </div>
-
-        <SaveButton label="Save backup settings" saving={saving} onClick={handleSave} />
-
-        {/* Danger zone */}
-        <div className="border border-red-100 rounded-xl p-4">
-          <p className="text-xs font-medium text-red-400 uppercase
-                        tracking-wider mb-3">Danger zone</p>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm text-gray-800">Reset all data</p>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Permanently delete all inventory, orders and customer data
-              </p>
-            </div>
-            {!confirmReset ? (
-              <button type="button" onClick={() => setConfirmReset(true)}
-                      className="flex items-center gap-1.5 px-3 py-2 border
-                                 border-red-200 rounded-lg text-xs text-red-500
-                                 hover:bg-red-50 transition-colors">
-                <IconTrash size={13} /> Reset data
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setConfirmReset(false)}
-                        className="px-3 py-2 border border-gray-200 rounded-lg
-                                   text-xs text-gray-600 hover:border-gray-300">
-                  Cancel
-                </button>
-                <button type="button"
-                        onClick={() => {
-                          setConfirmReset(false)
-                          onToast('Reset cancelled — not implemented', 'error')
-                        }}
-                        className="px-3 py-2 bg-red-500 text-white rounded-lg
-                                   text-xs font-medium hover:bg-red-600">
-                  Yes, reset
+                  {downloading.backup ? (
+                    <><span className="w-3 h-3 border border-white/30
+                                       border-t-white rounded-full animate-spin" />
+                      Downloading…</>
+                  ) : (
+                    <><IconDatabase size={13} /> Backup now</>
+                  )}
                 </button>
               </div>
-            )}
+ 
+              {/* Auto backup settings */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <Toggle
+                  checked={autoBackup}
+                  onChange={setAutoBackup}
+                  label="Automatic backups"
+                  sub="Schedule regular JSON backups (requires server-side cron setup)"
+                />
+                {autoBackup && (
+                  <div className="mt-3 pl-1">
+                    <Field label="Backup frequency">
+                      <select
+                        value={backupFreq}
+                        onChange={e => setBackupFreq(e.target.value)}
+                        className="w-40 px-3 py-2 border border-gray-200
+                                   rounded-lg text-sm focus:outline-none
+                                   focus:border-blue-400 bg-white appearance-none"
+                      >
+                        {['Daily', 'Weekly', 'Monthly'].map(f => (
+                          <option key={f}>{f}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
+        )}
+ 
+        {/* ── Info note ───────────────────────── */}
+        <div className="flex items-start gap-2 px-3 py-3 bg-blue-50
+                        border border-blue-100 rounded-xl">
+          <IconDatabase size={14} className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-600 leading-relaxed">
+            CSV files open in Excel, Google Sheets, or any spreadsheet app.
+            The JSON backup can be used to restore data if needed.
+            {!isAdmin && (
+              <span className="block mt-1 text-blue-500">
+                Full JSON backup is available to Administrators only.
+              </span>
+            )}
+          </p>
         </div>
+ 
+        {/* ── Danger zone (Admin only) ─────────── */}
+        {isAdmin && (
+          <div className="border border-red-100 rounded-xl p-4">
+            <p className="text-xs font-medium text-red-400 uppercase
+                          tracking-wider mb-3">
+              Danger zone
+            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm text-gray-800">Reset all data</p>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  Permanently delete all inventory, orders and customer data.
+                  Download a backup first!
+                </p>
+              </div>
+              {!confirmReset ? (
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(true)}
+                  className="flex items-center gap-1.5 px-3 py-2 border
+                             border-red-200 rounded-lg text-xs text-red-500
+                             hover:bg-red-50 transition-colors"
+                >
+                  <IconTrash size={13} /> Reset data
+                </button>
+              ) : (
+                <div className="flex flex-col items-end gap-2">
+                  <p className="text-[10px] text-red-500 font-medium">
+                    Are you absolutely sure?
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setConfirmReset(false)}
+                      className="px-3 py-2 border border-gray-200 rounded-lg
+                                 text-xs text-gray-600 hover:border-gray-300"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmReset(false)
+                        onToast('Reset requires direct database access — contact your DBA', 'error')
+                      }}
+                      className="px-3 py-2 bg-red-500 text-white rounded-lg
+                                 text-xs font-medium hover:bg-red-600"
+                    >
+                      Yes, reset everything
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </Section>
   )
