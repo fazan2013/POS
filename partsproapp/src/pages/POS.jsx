@@ -1,28 +1,14 @@
 // ================================================
-// src/pages/POS.jsx  — fully connected to real API
+// src/pages/POS.jsx — with product images
 // ================================================
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   IconSearch, IconBarcode, IconCash, IconCreditCard,
   IconBuildingBank, IconPlus, IconMinus, IconX,
   IconShoppingCart, IconCheck, IconPrinter, IconTrash,
-  IconAlertTriangle, IconRefresh, IconUser
+  IconAlertTriangle, IconRefresh, IconUser, IconPackage
 } from '@tabler/icons-react'
-import { partsApi, ordersApi, customersApi,receiptApi,categoriesApi,fmt } from '../services/api'
-
-// ── Constants ─────────────────────────────────────
-
-
-const CATEGORIES = ['All', 'Engine', 'Brakes', 'Filter', 'Electrical', 'Suspension']
-
-
-const CAT_STYLES = {
-  Engine:     { bg: 'bg-blue-100',   text: 'text-blue-700'   },
-  Brakes:     { bg: 'bg-pink-100',   text: 'text-pink-700'   },
-  Filter:     { bg: 'bg-sky-100',    text: 'text-sky-700'    },
-  Electrical: { bg: 'bg-yellow-100', text: 'text-yellow-700' },
-  Suspension: { bg: 'bg-purple-100', text: 'text-purple-700' },
-}
+import { partsApi, ordersApi, customersApi, receiptApi, categoriesApi, fmt } from '../services/api'
 
 // ── Helpers ───────────────────────────────────────
 function Spinner({ size = 'md' }) {
@@ -41,7 +27,6 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
                     justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
 
-        {/* Header */}
         <div className="bg-slate-900 text-white px-6 py-5 text-center">
           <div className="w-10 h-10 bg-green-400 rounded-full flex items-center
                           justify-center mx-auto mb-3">
@@ -51,7 +36,6 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
           <p className="text-xs text-slate-400 mt-1">Invoice #{invoiceNo}</p>
         </div>
 
-        {/* Body */}
         <div className="px-5 py-4 max-h-80 overflow-y-auto">
           <div className="flex justify-between text-xs text-gray-400 mb-3">
             <span>{now}</span>
@@ -65,7 +49,6 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
             </div>
           )}
 
-          {/* Items */}
           <div className="space-y-2 mb-4">
             {cart.map(item => (
               <div key={item.id} className="flex justify-between text-sm">
@@ -74,52 +57,43 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
                   <span className="text-gray-400 ml-1">×{item.qty}</span>
                 </span>
                 <span className="font-medium text-gray-900">
-                  {fmt((item.sellPrice * item.qty).toFixed(2))}
+                  {fmt(item.sellPrice * item.qty)}
                 </span>
               </div>
             ))}
           </div>
 
-          {/* Totals */}
           <div className="border-t border-gray-100 pt-3 space-y-1.5">
             <div className="flex justify-between text-xs text-gray-500">
-              <span>Subtotal</span>
-              <span>{fmt(totals.subtotal.toFixed(2))}</span>
+              <span>Subtotal</span><span>{fmt(totals.subtotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
-              <span>Tax (5%)</span>
-              <span>{fmt(totals.tax.toFixed(2))}</span>
+              <span>Tax ({totals.taxRate}%)</span><span>{fmt(totals.tax)}</span>
             </div>
             {totals.discount > 0 && (
               <div className="flex justify-between text-xs text-green-600">
-                <span>Discount (3%)</span>
-                <span>-{fmt(totals.discount.toFixed(2))}</span>
+                <span>Discount ({totals.discountRate}%)</span>
+                <span>-{fmt(totals.discount)}</span>
               </div>
             )}
             <div className="flex justify-between text-base font-medium
                             text-gray-900 border-t border-gray-100 pt-2 mt-1">
-              <span>Total</span>
-              <span>{fmt(totals.total.toFixed(2))}</span>
+              <span>Total</span><span>{fmt(totals.total)}</span>
             </div>
           </div>
         </div>
 
-        {/* Actions */}
         <div className="px-5 pb-5 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm
-                       text-gray-600 hover:border-gray-300 flex items-center
-                       justify-center gap-2"
-          >
+          <button onClick={onClose}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm
+                             text-gray-600 hover:border-gray-300 flex items-center
+                             justify-center gap-2">
             <IconShoppingCart size={15} /> New sale
           </button>
-          <button
-            onClick={() => window.print()}
-            className="flex-1 py-2.5 bg-slate-900 text-white rounded-xl
-                       text-sm font-medium hover:bg-slate-700 flex items-center
-                       justify-center gap-2"
-          >
+          <button onClick={() => window.print()}
+                  className="flex-1 py-2.5 bg-slate-900 text-white rounded-xl
+                             text-sm font-medium hover:bg-slate-700 flex items-center
+                             justify-center gap-2">
             <IconPrinter size={15} /> Print
           </button>
         </div>
@@ -128,49 +102,67 @@ function ReceiptModal({ cart, totals, payMethod, customerName, invoiceNo, onClos
   )
 }
 
-// ── Product Card ──────────────────────────────────
+// ── Product Card — with image ─────────────────────
 function ProductCard({ product, onAdd }) {
   const isOut = product.quantity === 0
   const isLow = product.quantity > 0 && product.quantity <= product.minStock
-  const cat   = CAT_STYLES[product.category] || { bg: 'bg-gray-100', text: 'text-gray-600' }
 
   return (
     <div
       onClick={() => !isOut && onAdd(product)}
       className={`bg-white border rounded-xl p-3 transition-all duration-100
-                  relative select-none
+                  relative select-none flex flex-col gap-2
                   ${isOut
                     ? 'opacity-50 cursor-not-allowed border-gray-100'
                     : 'cursor-pointer border-gray-100 hover:border-blue-400 hover:bg-blue-50'}`}
     >
+      {/* Stock badges */}
       {isOut && (
         <span className="absolute top-2 right-2 text-[9px] font-medium
-                         bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full">
+                         bg-red-50 text-red-600 px-1.5 py-0.5 rounded-full z-10">
           Out
         </span>
       )}
       {isLow && !isOut && (
         <span className="absolute top-2 right-2 text-[9px] font-medium
-                         bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full">
+                         bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full z-10">
           Low
         </span>
       )}
 
-      <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full
-                        inline-block mb-2 ${cat.bg} ${cat.text}`}>
-        {product.category}
-      </span>
+      {/* ── Product image ── */}
+      <div className="w-full h-24 rounded-lg overflow-hidden bg-gray-50
+                      border border-gray-100 flex items-center justify-center
+                      flex-shrink-0">
+        {product.imageBase64 ? (
+          <img
+            src={product.imageBase64}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="flex flex-col items-center gap-1 text-gray-300">
+            <IconPackage size={24} />
+            <p className="text-[9px] text-gray-300">{product.category}</p>
+          </div>
+        )}
+      </div>
 
-      <p className="text-xs font-medium text-gray-900 leading-snug mb-0.5 line-clamp-2">
-        {product.name}
-      </p>
-      <p className="text-[10px] text-gray-400 font-mono mb-2">
-        {product.model ? `${product.model} · ` : ''}{product.partCode}
-      </p>
+      {/* Part info */}
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-gray-900 leading-snug
+                      line-clamp-2 mb-0.5">
+          {product.name}
+        </p>
+        <p className="text-[10px] text-gray-400 font-mono truncate">
+          {product.model ? `${product.model} · ` : ''}{product.partCode}
+        </p>
+      </div>
 
-      <div className="flex items-center justify-between">
+      {/* Price + stock */}
+      <div className="flex items-center justify-between mt-auto">
         <span className="text-sm font-medium text-gray-900">
-          {fmt(product.sellPrice?.toFixed(2))}
+          {fmt(product.sellPrice)}
         </span>
         <span className="text-[10px] text-gray-400">
           {isOut ? 'Out of stock' : `${product.quantity} left`}
@@ -180,20 +172,39 @@ function ProductCard({ product, onAdd }) {
   )
 }
 
-// ── Cart Item Row ─────────────────────────────────
+// ── Cart Item Row — with thumbnail ────────────────
 function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
   return (
     <div className="flex items-center gap-2 py-3
                     border-b border-gray-50 last:border-0">
+
+      {/* ── Thumbnail ── */}
+      <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-50
+                      border border-gray-100 flex items-center justify-center
+                      flex-shrink-0">
+        {item.imageBase64 ? (
+          <img
+            src={item.imageBase64}
+            alt={item.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <IconPackage size={14} className="text-gray-300" />
+        )}
+      </div>
+
+      {/* Item info */}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-gray-900 truncate">{item.name}</p>
+        <p className="text-xs font-medium text-gray-900 truncate leading-tight">
+          {item.name}
+        </p>
         <p className="text-[10px] text-gray-400">
-          {fmt(item.sellPrice?.toFixed(2))} each
+          {fmt(item.sellPrice)} each
         </p>
       </div>
 
       {/* Qty controls */}
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1.5 flex-shrink-0">
         <button
           onClick={() => onQtyChange(item.id, -1)}
           className="w-6 h-6 rounded-md border border-gray-200 flex items-center
@@ -215,27 +226,27 @@ function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
         </button>
       </div>
 
-      {/* Line total */}
-      <span className="text-xs font-medium text-gray-900 w-14 text-right">
-        {fmt((item.sellPrice * item.qty).toFixed(2))}
-      </span>
-
-      {/* Remove */}
-      <button
-        onClick={() => onRemove(item.id)}
-        className="text-gray-300 hover:text-red-400 transition-colors ml-1"
-      >
-        <IconX size={14} />
-      </button>
+      {/* Line total + remove */}
+      <div className="text-right flex-shrink-0">
+        <p className="text-xs font-medium text-gray-900">
+          {fmt(item.sellPrice * item.qty)}
+        </p>
+        <button
+          onClick={() => onRemove(item.id)}
+          className="text-[10px] text-red-400 hover:text-red-600 transition-colors mt-0.5"
+        >
+          remove
+        </button>
+      </div>
     </div>
   )
 }
 
 // ── Customer Selector ─────────────────────────────
 function CustomerSelector({ selectedCustomer, onSelect, onClear }) {
-  const [search,    setSearch]    = useState('')
-  const [results,   setResults]   = useState([])
-  const [loading,   setLoading]   = useState(false)
+  const [search,       setSearch]       = useState('')
+  const [results,      setResults]      = useState([])
+  const [loading,      setLoading]      = useState(false)
   const [showDropdown, setShowDropdown] = useState(false)
 
   async function handleSearch(q) {
@@ -272,10 +283,7 @@ function CustomerSelector({ selectedCustomer, onSelect, onClear }) {
             </p>
           </div>
         </div>
-        <button
-          onClick={onClear}
-          className="text-blue-400 hover:text-blue-600"
-        >
+        <button onClick={onClear} className="text-blue-400 hover:text-blue-600">
           <IconX size={14} />
         </button>
       </div>
@@ -307,21 +315,17 @@ function CustomerSelector({ selectedCustomer, onSelect, onClear }) {
         <div className="absolute top-full left-0 right-0 mt-1 bg-white border
                         border-gray-200 rounded-xl shadow-lg z-20 overflow-hidden">
           {results.map(c => (
-            <button
-              key={c.id}
-              onClick={() => selectCustomer(c)}
-              className="w-full flex items-center gap-2.5 px-3 py-2.5
-                         hover:bg-gray-50 text-left border-b border-gray-50 last:border-0"
-            >
+            <button key={c.id} onClick={() => selectCustomer(c)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5
+                               hover:bg-gray-50 text-left border-b border-gray-50
+                               last:border-0">
               <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center
                               justify-center text-[10px] font-medium text-slate-600">
                 {c.name.charAt(0)}
               </div>
               <div>
                 <p className="text-xs font-medium text-gray-900">{c.name}</p>
-                <p className="text-[10px] text-gray-400">
-                  {c.phone} · {c.type}
-                </p>
+                <p className="text-[10px] text-gray-400">{c.phone} · {c.type}</p>
               </div>
             </button>
           ))}
@@ -331,51 +335,83 @@ function CustomerSelector({ selectedCustomer, onSelect, onClear }) {
   )
 }
 
-// ── Main POS Component ────────────────────────────
+// ════════════════════════════════════════════════
+// MAIN POS COMPONENT
+// ════════════════════════════════════════════════
 export default function POS() {
 
-const [posSettings, setPosSettings] = useState({
-  taxRate:         5,
-  discountRate:    3,
-  discountMinimum: 100,
-  autoPrint:       false,
-})
+  const [posSettings, setPosSettings] = useState({
+    taxRate:         5,
+    discountRate:    3,
+    discountMinimum: 100,
+    autoPrint:       false,
+  })
 
-const [categories,        setCategories]        = useState([])
-const [loadingCategories, setLoadingCategories] = useState(true)
-  // ── Products state ─────────────────────────────
-  const [products,     setProducts]     = useState([])
-  const [loadingParts, setLoadingParts] = useState(true)
-  const [partsError,   setPartsError]   = useState(null)
-  const [search,       setSearch]       = useState('')
-  const [activeCat,    setActiveCat]    = useState('All')
-  const [partsPage,    setPartsPage]    = useState(1)
-  const [totalPages,   setTotalPages]   = useState(1)
+  // ── Categories ────────────────────────────────
+  const [categories,        setCategories]        = useState([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
 
-  // ── Cart state ─────────────────────────────────
-  const [cart,         setCart]         = useState([])
-  const [payMethod,    setPayMethod]    = useState('Cash')
-  const [customer,     setCustomer]     = useState(null)
+  // ── Products ──────────────────────────────────
+  const [products,      setProducts]      = useState([])
+  const [loadingParts,  setLoadingParts]  = useState(true)
+  const [partsError,    setPartsError]    = useState(null)
+  const [search,        setSearch]        = useState('')
+  const [activeCat,     setActiveCat]     = useState('All')
+  const [partsPage,     setPartsPage]     = useState(1)
+  const [totalPages,    setTotalPages]    = useState(1)
 
-  // ── Checkout state ─────────────────────────────
-  const [checkingOut,  setCheckingOut]  = useState(false)
-  const [checkoutError,setCheckoutError]= useState(null)
-  const [receipt,      setReceipt]      = useState(null)
-  const [toast,        setToast]        = useState(null)
+  // ── Cart ──────────────────────────────────────
+  const [cart,          setCart]          = useState([])
+  const [payMethod,     setPayMethod]     = useState('Cash')
+  const [customer,      setCustomer]      = useState(null)
 
-//  const [categories,     setCategories]     = useState([])
+  // ── Checkout ──────────────────────────────────
+  const [checkingOut,   setCheckingOut]   = useState(false)
+  const [checkoutError, setCheckoutError] = useState(null)
+  const [receipt,       setReceipt]       = useState(null)
+  const [toast,         setToast]         = useState(null)
 
-  // ── Load products from API ─────────────────────
+  // ── Load POS settings ─────────────────────────
+  useEffect(() => {
+    async function loadPosSettings() {
+      try {
+        const settings = await receiptApi.get()
+        setPosSettings({
+          taxRate:         settings.taxRate         ?? 5,
+          discountRate:    settings.discountRate     ?? 3,
+          discountMinimum: settings.discountMinimum  ?? 100,
+          autoPrint:       settings.autoPrint        ?? false,
+        })
+      } catch (err) {
+        console.warn('Could not load POS settings, using defaults:', err.message)
+      }
+    }
+    loadPosSettings()
+  }, [])
+
+  // ── Load categories ───────────────────────────
+  useEffect(() => {
+    async function loadCategories() {
+      setLoadingCategories(true)
+      try {
+        const data = await categoriesApi.getAll()
+        setCategories(data || [])
+      } catch (err) {
+        console.warn('Could not load categories:', err.message)
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+    loadCategories()
+  }, [])
+
+  // ── Load products ─────────────────────────────
   const fetchProducts = useCallback(async () => {
     setLoadingParts(true)
     setPartsError(null)
     try {
-
-    
       const res = await partsApi.getAll(
-        partsPage,
-        12,
-        search,
+        partsPage, 12, search,
         activeCat === 'All' ? '' : activeCat
       )
       setProducts(res.data      || [])
@@ -390,81 +426,57 @@ const [loadingCategories, setLoadingCategories] = useState(true)
   useEffect(() => { fetchProducts() }, [fetchProducts])
   useEffect(() => { setPartsPage(1) }, [search, activeCat])
 
-  // ── Toast helper ───────────────────────────────
+  // ── Toast ─────────────────────────────────────
   function showToast(msg, type = 'success') {
     setToast({ msg, type })
     setTimeout(() => setToast(null), 2000)
   }
 
-  useEffect(() => {
-  async function loadPosSettings() {
-    try {
-      const settings = await receiptApi.get()
-      setPosSettings({
-        taxRate:         settings.taxRate         ?? 5,
-        discountRate:    settings.discountRate    ?? 3,
-        discountMinimum: settings.discountMinimum ?? 100,
-        autoPrint:       settings.autoPrint       ?? false,
-      })
-    } catch (err) {
-      console.warn('Could not load POS settings, using defaults:', err.message)
-    }
-  }
-  loadPosSettings()
-}, [])
-
-//
-useEffect(() => {
-  async function loadCategories() {
-    setLoadingCategories(true)
-    try {
-      const data = await categoriesApi.getAll()
-      setCategories(data || [])
-    } catch (err) {
-      console.warn('Could not load categories:', err.message)
-    } finally {
-      setLoadingCategories(false)
-    }
-  }
-  loadCategories()
-}, [])
-//
-
-
-  // ── Totals ─────────────────────────────────────
+  // ── Totals ────────────────────────────────────
   const totals = useMemo(() => {
-  const subtotal = cart.reduce((a, c) => a + c.sellPrice * c.qty, 0)
-  const tax      = Math.round(subtotal * (posSettings.taxRate / 100) * 100) / 100
-  const discount = subtotal >= posSettings.discountMinimum
-    ? Math.round(subtotal * (posSettings.discountRate / 100) * 100) / 100
-    : 0
-  const total = subtotal + tax - discount
-  return { subtotal, tax, discount, total }
-}, [cart, posSettings])
+    const subtotal     = cart.reduce((a, c) => a + c.sellPrice * c.qty, 0)
+    const tax          = Math.round(subtotal * (posSettings.taxRate / 100) * 100) / 100
+    const discount     = subtotal >= posSettings.discountMinimum
+      ? Math.round(subtotal * (posSettings.discountRate / 100) * 100) / 100
+      : 0
+    const total        = subtotal + tax - discount
+    return {
+      subtotal, tax, discount, total,
+      taxRate:      posSettings.taxRate,
+      discountRate: posSettings.discountRate,
+    }
+  }, [cart, posSettings])
 
   const itemCount = cart.reduce((a, c) => a + c.qty, 0)
 
-  // ── Add to cart ────────────────────────────────
-  function addToCart(product) {
-    if (product.quantity === 0) return
-
+  // ── Add to cart — includes imageBase64 ────────
+  function addToCart(part) {
     setCart(prev => {
-      const existing = prev.find(x => x.id === product.id)
+      const existing = prev.find(i => i.id === part.id)
       if (existing) {
-        if (existing.qty >= product.quantity) {
+        if (existing.qty >= part.quantity) {
           showToast('Max stock reached', 'warn')
           return prev
         }
-        return prev.map(x =>
-          x.id === product.id ? { ...x, qty: x.qty + 1 } : x
+        return prev.map(i =>
+          i.id === part.id ? { ...i, qty: i.qty + 1 } : i
         )
       }
-      showToast(`${product.name} added`)
-      return [...prev, { ...product, qty: 1 }]
+      showToast(`${part.name} added`)
+      return [...prev, {
+        id:          part.id,
+        name:        part.name,
+        partCode:    part.partCode,
+        sellPrice:   part.sellPrice,
+        quantity:    part.quantity,
+        unit:        part.unit,
+        imageBase64: part.imageBase64 || null,  // ← image for cart thumbnail
+        qty:         1,
+      }]
     })
   }
 
-  // ── Change qty ─────────────────────────────────
+  // ── Change qty ────────────────────────────────
   function changeQty(productId, delta) {
     setCart(prev =>
       prev
@@ -481,29 +493,26 @@ useEffect(() => {
     )
   }
 
-  // ── Remove from cart ───────────────────────────
+  // ── Remove ────────────────────────────────────
   function removeItem(productId) {
     setCart(prev => prev.filter(x => x.id !== productId))
   }
 
-  // ── Clear cart ─────────────────────────────────
+  // ── Clear cart ────────────────────────────────
   function clearCart() {
     setCart([])
     setCustomer(null)
     setCheckoutError(null)
   }
 
-  // ── Checkout → POST /api/orders ───────────────
+  // ── Checkout ──────────────────────────────────
   async function handleCheckout() {
     if (cart.length === 0) return
-
     setCheckingOut(true)
     setCheckoutError(null)
-
     try {
-      // Build order payload
       const payload = {
-        customerId:    customer?.id || 1, // fallback to walk-in customer id=1
+        customerId:    customer?.id || 1,
         paymentMethod: payMethod,
         notes:         customer ? `Customer: ${customer.name}` : 'Walk-in customer',
         items: cart.map(item => ({
@@ -511,21 +520,13 @@ useEffect(() => {
           quantity: item.qty,
         })),
       }
-
       const order = await ordersApi.create(payload)
-
-      // Show receipt
       setReceipt({
         invoiceNo:    order.orderNumber,
         customerName: customer?.name || null,
       })
-
-      if (posSettings.autoPrint) {
-        setTimeout(() => window.print(), 800)
-      }
-      // Refresh product list to show updated stock
+      if (posSettings.autoPrint) setTimeout(() => window.print(), 800)
       fetchProducts()
-
     } catch (err) {
       setCheckoutError(err.message || 'Checkout failed. Please try again.')
     } finally {
@@ -533,14 +534,12 @@ useEffect(() => {
     }
   }
 
-  // ── Close receipt → reset for next sale ────────
   function handleCloseReceipt() {
     setReceipt(null)
     clearCart()
     setSearch('')
   }
 
-  // ── Get max qty for a cart item ────────────────
   function getMaxQty(productId) {
     const product = products.find(p => p.id === productId)
     return product?.quantity ?? 999
@@ -549,15 +548,13 @@ useEffect(() => {
   return (
     <div className="flex h-[calc(100vh-57px)] overflow-hidden relative">
 
-      {/* ── Toast ──────────────────────────────── */}
+      {/* Toast */}
       {toast && (
         <div className={`fixed top-4 right-4 z-40 text-white text-xs
                          px-3 py-2 rounded-lg shadow-lg flex items-center gap-2
-                         ${toast.type === 'warn'
-                           ? 'bg-amber-500'
-                           : toast.type === 'error'
-                             ? 'bg-red-500'
-                             : 'bg-slate-900'}`}>
+                         ${toast.type === 'warn'  ? 'bg-amber-500'
+                         : toast.type === 'error' ? 'bg-red-500'
+                         : 'bg-slate-900'}`}>
           {toast.type === 'warn'
             ? <IconAlertTriangle size={14} />
             : <IconCheck size={14} />}
@@ -565,7 +562,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* ── Receipt Modal ──────────────────────── */}
+      {/* Receipt Modal */}
       {receipt && (
         <ReceiptModal
           cart={cart}
@@ -577,10 +574,10 @@ useEffect(() => {
         />
       )}
 
-      {/* ════ LEFT — Product Grid ════════════════ */}
+      {/* ════ LEFT — Product Grid ════ */}
       <div className="flex-1 flex flex-col overflow-hidden border-r border-gray-100">
 
-        {/* Search + Barcode */}
+        {/* Search bar */}
         <div className="bg-white border-b border-gray-100 px-4 py-3 flex gap-2">
           <div className="relative flex-1">
             <IconSearch size={15}
@@ -594,69 +591,58 @@ useEffect(() => {
                          text-sm focus:outline-none focus:border-blue-400 bg-gray-50"
             />
           </div>
-          <button
-            onClick={fetchProducts}
-            className="w-10 h-10 border border-gray-200 rounded-xl flex items-center
-                       justify-center text-gray-500 hover:border-gray-300 bg-white"
-          >
+          <button onClick={fetchProducts}
+                  className="w-10 h-10 border border-gray-200 rounded-xl flex items-center
+                             justify-center text-gray-500 hover:border-gray-300 bg-white">
             <IconRefresh size={16} />
           </button>
-          <button
-            className="w-10 h-10 border border-gray-200 rounded-xl flex items-center
-                       justify-center text-gray-500 hover:border-gray-300 bg-white"
-          >
+          <button className="w-10 h-10 border border-gray-200 rounded-xl flex items-center
+                             justify-center text-gray-500 hover:border-gray-300 bg-white">
             <IconBarcode size={18} />
           </button>
         </div>
 
-        {/* Category Tabs */}
-<div className="bg-white border-b border-gray-100 px-4 py-2.5
-                flex gap-2 overflow-x-auto">
- 
-  {/* "All" is always first */}
-  <button
-    onClick={() => setActiveCat('All')}
-    className={`px-4 py-1.5 rounded-full text-xs font-medium
-                whitespace-nowrap flex-shrink-0 transition-all
-                ${activeCat === 'All'
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
-  >
-    All
-  </button>
- 
-  {/* Dynamic categories from DB */}
-  {loadingCategories ? (
-    // Skeleton placeholders while loading
-    Array(5).fill(0).map((_, i) => (
-      <div key={i}
-           className="w-16 h-7 bg-gray-100 rounded-full animate-pulse
-                      flex-shrink-0" />
-    ))
-  ) : (
-    categories.map(cat => (
-      <button
-        key={cat.id}
-        onClick={() => setActiveCat(cat.name)}
-        className={`px-4 py-1.5 rounded-full text-xs font-medium
-                    whitespace-nowrap flex-shrink-0 transition-all
-                    ${activeCat === cat.name
-                      ? 'bg-slate-900 text-white'
-                      : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
-      >
-        {/* Show color dot if category has a color */}
-        {cat.colorCode && (
-          <span
-            className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
-            style={{ background: cat.colorCode }}
-          />
-        )}
-        {cat.name}
-      </button>
-    ))
-  )}
-</div>
+        {/* Category Tabs — from API */}
+        <div className="bg-white border-b border-gray-100 px-4 py-2.5
+                        flex gap-2 overflow-x-auto">
+          <button
+            onClick={() => setActiveCat('All')}
+            className={`px-4 py-1.5 rounded-full text-xs font-medium
+                        whitespace-nowrap flex-shrink-0 transition-all
+                        ${activeCat === 'All'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
+          >
+            All
+          </button>
 
+          {loadingCategories ? (
+            Array(5).fill(0).map((_, i) => (
+              <div key={i}
+                   className="w-16 h-7 bg-gray-100 rounded-full animate-pulse flex-shrink-0" />
+            ))
+          ) : (
+            categories.map(cat => (
+              <button
+                key={cat.id}
+                onClick={() => setActiveCat(cat.name)}
+                className={`px-4 py-1.5 rounded-full text-xs font-medium
+                            whitespace-nowrap flex-shrink-0 transition-all
+                            ${activeCat === cat.name
+                              ? 'bg-slate-900 text-white'
+                              : 'bg-white border border-gray-200 text-gray-500 hover:border-gray-300'}`}
+              >
+                {cat.colorCode && (
+                  <span
+                    className="inline-block w-1.5 h-1.5 rounded-full mr-1.5 align-middle"
+                    style={{ background: cat.colorCode }}
+                  />
+                )}
+                {cat.name}
+              </button>
+            ))
+          )}
+        </div>
 
         {/* Error banner */}
         {partsError && (
@@ -664,10 +650,7 @@ useEffect(() => {
                           bg-red-50 border border-red-200 rounded-lg text-xs text-red-600">
             <IconAlertTriangle size={14} className="flex-shrink-0" />
             {partsError}
-            <button onClick={fetchProducts}
-                    className="ml-auto underline hover:no-underline">
-              Retry
-            </button>
+            <button onClick={fetchProducts} className="ml-auto underline">Retry</button>
           </div>
         )}
 
@@ -675,8 +658,7 @@ useEffect(() => {
         <div className="flex-1 overflow-y-auto p-4">
           {loadingParts ? (
             <div className="flex items-center justify-center h-full gap-3 text-gray-400">
-              <Spinner />
-              <span className="text-sm">Loading parts…</span>
+              <Spinner /><span className="text-sm">Loading parts…</span>
             </div>
           ) : products.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full
@@ -702,7 +684,6 @@ useEffect(() => {
                 ))}
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-4">
                   <button
@@ -731,7 +712,7 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* ════ RIGHT — Cart ═══════════════════════ */}
+      {/* ════ RIGHT — Cart ════ */}
       <div className="w-72 xl:w-80 flex flex-col bg-white flex-shrink-0">
 
         {/* Cart Header */}
@@ -745,11 +726,9 @@ useEffect(() => {
             </span>
           </div>
           {cart.length > 0 && (
-            <button
-              onClick={clearCart}
-              className="flex items-center gap-1 text-xs text-red-400
-                         hover:text-red-600 transition-colors"
-            >
+            <button onClick={clearCart}
+                    className="flex items-center gap-1 text-xs text-red-400
+                               hover:text-red-600 transition-colors">
               <IconTrash size={12} /> Clear
             </button>
           )}
@@ -792,23 +771,20 @@ useEffect(() => {
           {/* Totals */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-gray-500">
-              <span>Subtotal</span>
-              <span>{fmt(totals.subtotal.toFixed(2))}</span>
+              <span>Subtotal</span><span>{fmt(totals.subtotal)}</span>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
-              <span>Tax (5%)</span>
-              <span>{fmt(totals.tax.toFixed(2))}</span>
+              <span>Tax ({totals.taxRate}%)</span><span>{fmt(totals.tax)}</span>
             </div>
             {totals.discount > 0 && (
               <div className="flex justify-between text-xs text-green-600">
-                <span>Discount (3%)</span>
-                <span>-{fmt(totals.discount.toFixed(2))}</span>
+                <span>Discount ({totals.discountRate}%)</span>
+                <span>-{fmt(totals.discount)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm font-medium
                             text-gray-900 border-t border-gray-100 pt-2">
-              <span>Total</span>
-              <span>{fmt(totals.total.toFixed(2))}</span>
+              <span>Total</span><span>{fmt(totals.total)}</span>
             </div>
           </div>
 
@@ -822,8 +798,8 @@ useEffect(() => {
               <button
                 key={method.value}
                 onClick={() => setPayMethod(method.value)}
-                className={`flex flex-col items-center gap-1 py-2.5
-                            rounded-xl border text-xs transition-all
+                className={`flex flex-col items-center gap-1 py-2.5 rounded-xl
+                            border text-xs transition-all
                   ${payMethod === method.value
                     ? 'border-blue-400 bg-blue-50 text-blue-600'
                     : 'border-gray-200 text-gray-500 hover:border-gray-300'}`}
@@ -858,11 +834,9 @@ useEffect(() => {
                   ? 'bg-slate-700 text-white cursor-not-allowed'
                   : 'bg-slate-900 text-white hover:bg-slate-700 cursor-pointer'}`}
           >
-            {checkingOut ? (
-              <><Spinner size="sm" /> Processing…</>
-            ) : (
-              <><IconCheck size={16} /> Complete sale · {fmt(totals.total.toFixed(2))}</>
-            )}
+            {checkingOut
+              ? <><Spinner size="sm" /> Processing…</>
+              : <><IconCheck size={16} /> Complete sale · {fmt(totals.total)}</>}
           </button>
         </div>
       </div>

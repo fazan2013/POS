@@ -289,12 +289,34 @@ export default function Inventory() {
                           gap-2 md:gap-0">
 
             {/* Part name + code */}
-            <div>
-              <p className="text-xs font-medium text-gray-900">{part.name}</p>
-              <p className="text-[10px] text-gray-400 font-mono mt-0.5">
-                {part.partCode}
-              </p>
-            </div>
+            
+            <div className="flex items-center gap-2.5">
+ 
+  {/* Part image thumbnail */}
+  {part.imageBase64 ? (
+    <img
+      src={part.imageBase64}
+      alt={part.name}
+      className="w-8 h-8 rounded-lg object-cover flex-shrink-0
+                 border border-gray-100"
+    />
+  ) : (
+    // Fallback icon if no image
+    <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center
+                    justify-center flex-shrink-0 border border-gray-100">
+      <IconPackage size={14} className="text-gray-300" />
+    </div>
+  )}
+ 
+  <div>
+    <p className="text-xs font-medium text-gray-900">{part.name}</p>
+    <p className="text-[10px] text-gray-400 font-mono mt-0.5">
+      {part.partCode}
+    </p>
+  </div>
+</div>
+
+
 
             {/* Category badge — color from DB */}
             <div>

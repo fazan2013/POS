@@ -253,7 +253,12 @@ export default function PartForm() {
   const [form,         setForm]         = useState(EMPTY)
   const [selCategory,  setSelCategory]  = useState({ id: null, name: '' })
   const [selBrand,     setSelBrand]     = useState({ id: null, name: '' })
-  const [imagePreview, setImagePreview] = useState(null)
+  
+  const [imagePreview,  setImagePreview]  = useState(null)   // display URL
+  const [imageBase64,   setImageBase64]   = useState(null)   // base64 string to send to API
+  const [imageRemoving, setImageRemoving] = useState(false) 
+
+
   const [errors,       setErrors]       = useState({})
   const [toast,        setToast]        = useState(null)
   const [saving,       setSaving]       = useState(false)
@@ -324,6 +329,11 @@ export default function PartForm() {
           supplier:    part.supplier    || '',
           model:       part.model       || '',
         })
+
+        if (part.imageBase64) {
+          setImagePreview(part.imageBase64)   // show existing image
+          setImageBase64(part.imageBase64)    // keep it in payload
+        }
 
         // Pre-fill category
         if (part.category) {
@@ -407,6 +417,7 @@ export default function PartForm() {
       location:    form.location    || null,
       barcode:     form.barcode     || null,
       supplier:    form.supplier    || null,
+      imageBase64: imageBase64     || null,
     }
 
     setSaving(true)
@@ -719,39 +730,90 @@ export default function PartForm() {
           <div className="space-y-5">
 
             {/* Image upload */}
-            <Section title="Part image" subtitle="Upload a photo">
-              <label className={`flex flex-col items-center justify-center w-full h-40
-                                 border-2 border-dashed rounded-xl cursor-pointer
-                                 transition-colors group
-                                 ${imagePreview
-                                   ? 'border-blue-300 bg-blue-50'
-                                   : 'border-gray-200 bg-gray-50 hover:border-blue-300'}`}>
-                {imagePreview ? (
-                  <img src={imagePreview} alt="Part"
-                       className="h-full w-full object-contain p-2 rounded-xl" />
-                ) : (
-                  <div className="flex flex-col items-center gap-2 text-gray-400
-                                  group-hover:text-blue-400 transition-colors">
-                    <IconPhoto size={28} />
-                    <p className="text-xs font-medium">Click to upload</p>
-                    <p className="text-[10px]">PNG, JPG up to 5MB</p>
-                  </div>
-                )}
-                <input type="file" accept="image/*" className="hidden"
-                       onChange={e => {
-                         const file = e.target.files[0]
-                         if (file) setImagePreview(URL.createObjectURL(file))
-                       }} />
-              </label>
-              {imagePreview && (
-                <button type="button" onClick={() => setImagePreview(null)}
-                        className="mt-2 w-full py-2 border border-gray-200 rounded-lg
-                                   text-xs text-red-400 hover:border-red-300 hover:bg-red-50
-                                   flex items-center justify-center gap-1.5">
-                  <IconTrash size={12} /> Remove image
-                </button>
-              )}
-            </Section>
+            <Section title="Part image" subtitle="Upload a photo of the part">
+ 
+  {/* Upload area */}
+  <label className={`flex flex-col items-center justify-center w-full h-44
+                     border-2 border-dashed rounded-xl cursor-pointer
+                     transition-colors group relative overflow-hidden
+                     ${imagePreview
+                       ? 'border-blue-300 bg-blue-50'
+                       : 'border-gray-200 bg-gray-50 hover:border-blue-300 hover:bg-blue-50'}`}>
+    {imagePreview ? (
+      // Show existing/uploaded image
+      <img
+        src={imagePreview}
+        alt="Part"
+        className="w-full h-full object-contain p-2 rounded-xl"
+      />
+    ) : (
+      // Upload placeholder
+      <div className="flex flex-col items-center gap-2 text-gray-400
+                      group-hover:text-blue-400 transition-colors">
+        <IconPhoto size={28} />
+        <p className="text-xs font-medium">Click to upload image</p>
+        <p className="text-[10px] text-gray-300">PNG, JPG, WEBP up to 2MB</p>
+      </div>
+    )}
+ 
+    {/* Hidden file input */}
+    <input
+      type="file"
+      accept="image/png, image/jpeg, image/jpg, image/webp"
+      className="hidden"
+      onChange={async e => {
+        const file = e.target.files[0]
+        if (!file) return
+ 
+        // Validate size — max 2MB
+        if (file.size > 2 * 1024 * 1024) {
+          showToast('Image too large. Max size is 2MB', 'error')
+          e.target.value = ''
+          return
+        }
+ 
+        // Show preview immediately
+        const previewUrl = URL.createObjectURL(file)
+        setImagePreview(previewUrl)
+ 
+        // Convert to base64 for API
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64 = reader.result  // "data:image/jpeg;base64,..."
+          setImageBase64(base64)
+        }
+        reader.onerror = () => {
+          showToast('Failed to read image file', 'error')
+        }
+        reader.readAsDataURL(file)
+      }}
+    />
+  </label>
+ 
+  {/* Remove button — shown only if image exists */}
+  {imagePreview && (
+    <button
+      type="button"
+      onClick={() => {
+        setImagePreview(null)
+        setImageBase64(null)
+      }}
+      className="mt-2 w-full py-2 border border-gray-200 rounded-lg
+                 text-xs text-red-400 hover:border-red-300 hover:bg-red-50
+                 flex items-center justify-center gap-1.5 transition-colors"
+    >
+      <IconTrash size={12} /> Remove image
+    </button>
+  )}
+ 
+  {/* Image info */}
+  {imageBase64 && (
+    <p className="text-[10px] text-green-600 text-center mt-1.5
+                  flex items-center justify-center gap-1">
+      <IconCheck size={10} /> Image ready to save
+    </p>
+  )}
+</Section>
 
             {/* Summary */}
             <div className="bg-white border border-gray-100 rounded-xl p-5">
