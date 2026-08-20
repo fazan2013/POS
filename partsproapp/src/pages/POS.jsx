@@ -9,7 +9,8 @@ import {
   IconAlertTriangle, IconRefresh, IconUser, IconPackage
 } from '@tabler/icons-react'
 import { partsApi, ordersApi, customersApi, receiptApi, categoriesApi, fmt } from '../services/api'
-
+import { useRef } from 'react'
+import { IconLock, IconEdit } from '@tabler/icons-react'
 // ── Helpers ───────────────────────────────────────
 function Spinner({ size = 'md' }) {
   const s = size === 'sm' ? 'w-4 h-4 border' : 'w-6 h-6 border-2'
@@ -172,22 +173,256 @@ function ProductCard({ product, onAdd }) {
   )
 }
 
+
+//
+function AdminAuthModal({ onSuccess, onCancel }) {
+  const userRef = useRef(null)
+  const passRef = useRef(null)
+  const [loading, setLoading] = useState(false)
+  const [error,   setError]   = useState(null)
+
+  async function handleVerify() {
+    const email    = userRef.current?.value?.trim()
+    const password = passRef.current?.value
+
+    if (!email || !password) {
+      setError('Enter admin email and password')
+      return
+    }
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      // Call login API to verify credentials
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/auth/login`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.message || 'Invalid credentials')
+        return
+      }
+
+      // Must be Admin or Store Manager
+      if (!['Administrator', 'Store Manager'].includes(data.role)) {
+        setError('Only Administrator or Store Manager can adjust prices')
+        return
+      }
+
+      // Auth success — allow price edit
+      onSuccess()
+
+    } catch {
+      setError('Could not verify credentials. Check your connection.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center
+                    justify-center p-4"
+         onClick={onCancel}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xs p-6"
+           onClick={e => e.stopPropagation()}>
+
+        {/* Icon */}
+        <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center
+                        justify-center mx-auto mb-4">
+          <IconLock size={22} className="text-amber-600" />
+        </div>
+
+        <h3 className="text-sm font-medium text-gray-900 text-center mb-1">
+          Admin authorisation required
+        </h3>
+        <p className="text-xs text-gray-400 text-center mb-5">
+          Enter admin credentials to adjust the price
+        </p>
+
+        <div className="space-y-3">
+          <input
+            ref={userRef}
+            type="email"
+            placeholder="Admin email"
+            autoFocus
+            onKeyDown={e => e.key === 'Enter' && passRef.current?.focus()}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                       text-sm focus:outline-none focus:border-blue-400"
+          />
+          <input
+            ref={passRef}
+            type="password"
+            placeholder="Password"
+            onKeyDown={e => e.key === 'Enter' && handleVerify()}
+            className="w-full px-3 py-2.5 border border-gray-200 rounded-lg
+                       text-sm focus:outline-none focus:border-blue-400"
+          />
+
+          {error && (
+            <p className="text-xs text-red-500 flex items-center gap-1.5">
+              <IconAlertTriangle size={12} />{error}
+            </p>
+          )}
+        </div>
+
+        <div className="flex gap-2 mt-5">
+          <button onClick={onCancel}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl
+                             text-sm text-gray-600 hover:border-gray-300">
+            Cancel
+          </button>
+          <button onClick={handleVerify} disabled={loading}
+                  className="flex-1 py-2.5 bg-amber-500 text-white rounded-xl
+                             text-sm font-medium hover:bg-amber-600
+                             flex items-center justify-center gap-2
+                             disabled:opacity-50">
+            {loading ? <><Spinner size="sm" /> Verifying…</> : 'Verify'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+//
+
+//
+function PriceEditPopup({ item, onSave, onCancel }) {
+  const priceRef = useRef(null)
+  const [error, setError] = useState(null)
+
+  function handleSave() {
+    const val = parseFloat(priceRef.current?.value)
+    if (isNaN(val) || val <= 0) {
+      setError('Enter a valid price greater than 0')
+      return
+    }
+    onSave(val)
+  }
+
+  return (
+    <div className="absolute right-0 top-full mt-1 bg-white border border-amber-200
+                    rounded-xl shadow-xl z-50 p-3 w-56"
+         onClick={e => e.stopPropagation()}>
+
+      <p className="text-[10px] font-medium text-amber-600 uppercase
+                    tracking-wider mb-2 flex items-center gap-1">
+        <IconEdit size={10} /> Adjust price
+      </p>
+
+      <p className="text-[10px] text-gray-400 mb-2">
+        Original: {fmt(item.originalPrice ?? item.sellPrice)}
+      </p>
+
+      <div className="flex gap-2">
+        <input
+          ref={priceRef}
+          type="number"
+          min="0.01"
+          step="0.01"
+          defaultValue={(item.adjustedPrice ?? item.sellPrice).toFixed(2)}
+          autoFocus
+          onKeyDown={e => e.key === 'Enter' && handleSave()}
+          onChange={() => setError(null)}
+          className="flex-1 px-2.5 py-1.5 border border-gray-200 rounded-lg
+                     text-sm focus:outline-none focus:border-amber-400"
+        />
+        <button onClick={handleSave}
+                className="px-3 py-1.5 bg-amber-500 text-white rounded-lg
+                           text-xs font-medium hover:bg-amber-600">
+          <IconCheck size={13} />
+        </button>
+        <button onClick={onCancel}
+                className="px-2.5 py-1.5 border border-gray-200 rounded-lg
+                           text-xs text-gray-500 hover:border-gray-300">
+          <IconX size={13} />
+        </button>
+      </div>
+
+      {error && (
+        <p className="text-[10px] text-red-500 mt-1.5">{error}</p>
+      )}
+
+      {/* Reset to original */}
+      {item.adjustedPrice && item.adjustedPrice !== item.originalPrice && (
+        <button
+          onClick={() => onSave(item.originalPrice)}
+          className="text-[10px] text-gray-400 hover:text-gray-600 mt-2
+                     underline w-full text-center"
+        >
+          Reset to original ({fmt(item.originalPrice)})
+        </button>
+      )}
+    </div>
+  )
+}
+
+//
+
+
+
 // ── Cart Item Row — with thumbnail ────────────────
-function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
+function CartItemRow({ item, maxQty, onQtyChange, onRemove, onPriceAdjust }) {
+
+  const [showAuthModal, setShowAuthModal] = useState(false)
+  const [showPriceEdit, setShowPriceEdit] = useState(false)
+  const [adminVerified, setAdminVerified] = useState(false)
+
+  const isAdjusted = item.adjustedPrice && item.adjustedPrice !== item.originalPrice
+  const displayPrice = item.adjustedPrice ?? item.sellPrice
+
+  function handleEditClick() {
+    if (adminVerified) {
+      // Already verified this session — go straight to edit
+      setShowPriceEdit(true)
+    } else {
+      setShowAuthModal(true)
+    }
+  }
+
+  function handleAuthSuccess() {
+    setShowAuthModal(false)
+    setAdminVerified(true)
+    setShowPriceEdit(true)
+  }
+
+  function handlePriceSave(newPrice) {
+    onPriceAdjust(item.id, newPrice)
+    setShowPriceEdit(false)
+  }
+
   return (
     <div className="flex items-center gap-2 py-3
-                    border-b border-gray-50 last:border-0">
+                    border-b border-gray-50 last:border-0 relative">
 
-      {/* ── Thumbnail ── */}
+      {/* Admin Auth Modal */}
+      {showAuthModal && (
+        <AdminAuthModal
+          onSuccess={handleAuthSuccess}
+          onCancel={() => setShowAuthModal(false)}
+        />
+      )}
+
+      {/* Price Edit Popup */}
+      {showPriceEdit && (
+        <PriceEditPopup
+          item={item}
+          onSave={handlePriceSave}
+          onCancel={() => setShowPriceEdit(false)}
+        />
+      )}
+
+      {/* Thumbnail */}
       <div className="w-9 h-9 rounded-lg overflow-hidden bg-gray-50
                       border border-gray-100 flex items-center justify-center
                       flex-shrink-0">
         {item.imageBase64 ? (
-          <img
-            src={item.imageBase64}
-            alt={item.name}
-            className="w-full h-full object-cover"
-          />
+          <img src={item.imageBase64} alt={item.name}
+               className="w-full h-full object-cover" />
         ) : (
           <IconPackage size={14} className="text-gray-300" />
         )}
@@ -198,30 +433,49 @@ function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
         <p className="text-xs font-medium text-gray-900 truncate leading-tight">
           {item.name}
         </p>
-        <p className="text-[10px] text-gray-400">
-          {fmt(item.sellPrice)} each
-        </p>
+
+        {/* Price row — shows edit button + adjusted indicator */}
+        <div className="flex items-center gap-1.5 mt-0.5">
+          <p className={`text-[10px] ${isAdjusted ? 'text-amber-600 font-medium' : 'text-gray-400'}`}>
+            {fmt(displayPrice)} each
+            {isAdjusted && (
+              <span className="ml-1 line-through text-gray-300">
+                {fmt(item.originalPrice)}
+              </span>
+            )}
+          </p>
+
+          {/* Edit price button */}
+          <button
+            onClick={handleEditClick}
+            title="Adjust price (admin only)"
+            className={`flex items-center gap-0.5 text-[9px] font-medium px-1.5
+                        py-0.5 rounded-full transition-colors
+                        ${isAdjusted
+                          ? 'bg-amber-100 text-amber-600 hover:bg-amber-200'
+                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'}`}
+          >
+            <IconEdit size={8} />
+            {isAdjusted ? 'Adjusted' : 'Edit price'}
+          </button>
+        </div>
       </div>
 
       {/* Qty controls */}
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        <button
-          onClick={() => onQtyChange(item.id, -1)}
-          className="w-6 h-6 rounded-md border border-gray-200 flex items-center
-                     justify-center text-gray-500 hover:border-gray-300"
-        >
+        <button onClick={() => onQtyChange(item.id, -1)}
+                className="w-6 h-6 rounded-md border border-gray-200 flex items-center
+                           justify-center text-gray-500 hover:border-gray-300">
           <IconMinus size={11} />
         </button>
         <span className="text-xs font-medium text-gray-900 w-5 text-center">
           {item.qty}
         </span>
-        <button
-          onClick={() => onQtyChange(item.id, 1)}
-          disabled={item.qty >= maxQty}
-          className="w-6 h-6 rounded-md border border-gray-200 flex items-center
-                     justify-center text-gray-500 hover:border-gray-300
-                     disabled:opacity-40 disabled:cursor-not-allowed"
-        >
+        <button onClick={() => onQtyChange(item.id, 1)}
+                disabled={item.qty >= maxQty}
+                className="w-6 h-6 rounded-md border border-gray-200 flex items-center
+                           justify-center text-gray-500 hover:border-gray-300
+                           disabled:opacity-40 disabled:cursor-not-allowed">
           <IconPlus size={11} />
         </button>
       </div>
@@ -229,12 +483,11 @@ function CartItemRow({ item, maxQty, onQtyChange, onRemove }) {
       {/* Line total + remove */}
       <div className="text-right flex-shrink-0">
         <p className="text-xs font-medium text-gray-900">
-          {fmt(item.sellPrice * item.qty)}
+          {fmt(displayPrice * item.qty)}
         </p>
-        <button
-          onClick={() => onRemove(item.id)}
-          className="text-[10px] text-red-400 hover:text-red-600 transition-colors mt-0.5"
-        >
+        <button onClick={() => onRemove(item.id)}
+                className="text-[10px] text-red-400 hover:text-red-600
+                           transition-colors mt-0.5">
           remove
         </button>
       </div>
@@ -434,47 +687,68 @@ export default function POS() {
 
   // ── Totals ────────────────────────────────────
   const totals = useMemo(() => {
-    const subtotal     = cart.reduce((a, c) => a + c.sellPrice * c.qty, 0)
-    const tax          = Math.round(subtotal * (posSettings.taxRate / 100) * 100) / 100
-    const discount     = subtotal >= posSettings.discountMinimum
-      ? Math.round(subtotal * (posSettings.discountRate / 100) * 100) / 100
-      : 0
-    const total        = subtotal + tax - discount
-    return {
-      subtotal, tax, discount, total,
-      taxRate:      posSettings.taxRate,
-      discountRate: posSettings.discountRate,
-    }
-  }, [cart, posSettings])
+  const subtotal = cart.reduce((a, c) => {
+    const price = c.adjustedPrice ?? c.sellPrice
+    return a + price * c.qty
+  }, 0)
+  const tax      = Math.round(subtotal * (posSettings.taxRate / 100) * 100) / 100
+  const discount = subtotal >= posSettings.discountMinimum
+    ? Math.round(subtotal * (posSettings.discountRate / 100) * 100) / 100
+    : 0
+  const total = subtotal + tax - discount
+  return {
+    subtotal, tax, discount, total,
+    taxRate:      posSettings.taxRate,
+    discountRate: posSettings.discountRate,
+  }
+}, [cart, posSettings])
+
+
 
   const itemCount = cart.reduce((a, c) => a + c.qty, 0)
 
   // ── Add to cart — includes imageBase64 ────────
   function addToCart(part) {
-    setCart(prev => {
-      const existing = prev.find(i => i.id === part.id)
-      if (existing) {
-        if (existing.qty >= part.quantity) {
-          showToast('Max stock reached', 'warn')
-          return prev
-        }
-        return prev.map(i =>
-          i.id === part.id ? { ...i, qty: i.qty + 1 } : i
-        )
+  setCart(prev => {
+    const existing = prev.find(i => i.id === part.id)
+    if (existing) {
+      if (existing.qty >= part.quantity) {
+        showToast('Max stock reached', 'warn')
+        return prev
       }
-      showToast(`${part.name} added`)
-      return [...prev, {
-        id:          part.id,
-        name:        part.name,
-        partCode:    part.partCode,
-        sellPrice:   part.sellPrice,
-        quantity:    part.quantity,
-        unit:        part.unit,
-        imageBase64: part.imageBase64 || null,  // ← image for cart thumbnail
-        qty:         1,
-      }]
-    })
-  }
+      return prev.map(i =>
+        i.id === part.id ? { ...i, qty: i.qty + 1 } : i
+      )
+    }
+    showToast(`${part.name} added`)
+    return [...prev, {
+      id:             part.id,
+      name:           part.name,
+      partCode:       part.partCode,
+      sellPrice:      part.sellPrice,
+      originalPrice:  part.sellPrice,      // ← store original
+      adjustedPrice:  null,                // ← null = not adjusted
+      quantity:       part.quantity,
+      unit:           part.unit,
+      imageBase64:    part.imageBase64 || null,
+      qty:            1,
+    }]
+  })
+}
+
+function handlePriceAdjust(itemId, newPrice) {
+  setCart(prev => prev.map(item =>
+    item.id === itemId
+      ? {
+          ...item,
+          adjustedPrice: newPrice,
+          sellPrice:     newPrice,   // update sellPrice used in totals
+        }
+      : item
+  ))
+}
+
+
 
   // ── Change qty ────────────────────────────────
   function changeQty(productId, delta) {
@@ -518,6 +792,7 @@ export default function POS() {
         items: cart.map(item => ({
           partId:   item.id,
           quantity: item.qty,
+           unitPrice:  item.adjustedPrice ?? item.sellPrice,
         })),
       }
       const order = await ordersApi.create(payload)
@@ -760,6 +1035,7 @@ export default function POS() {
                 maxQty={getMaxQty(item.id)}
                 onQtyChange={changeQty}
                 onRemove={removeItem}
+                onPriceAdjust={handlePriceAdjust}
               />
             ))
           )}
