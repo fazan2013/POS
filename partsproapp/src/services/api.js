@@ -22,24 +22,19 @@ export function getUser() {
     const raw = localStorage.getItem('pp_user')
     if (!raw) return {}
     return JSON.parse(raw)
-    // Returns { fullName, email, role, profileImage, expiresAt }
   } catch {
     return {}
   }
 }
 
 export function saveSession(data) {
-  // Read any existing stored data (to preserve profileImage)
-  const existing = JSON.parse(localStorage.getItem('pp_user') || '{}')
- 
   localStorage.setItem('pp_token', data.token)
   localStorage.setItem('pp_user', JSON.stringify({
-    ...existing,              // keep existing profileImage if present
     fullName:     data.fullName,
     email:        data.email,
     role:         data.role,
+    profileImage: data.profileImage || null,  // ← from login response
     expiresAt:    data.expiresAt,
-    // profileImage NOT overwritten on login — stays from previous session
   }))
 }
 
@@ -144,7 +139,7 @@ export const suppliersApi = {
   delete:   id         => del(`/suppliers/${id}`),
   getStats: ()         => get('/suppliers/stats'),
 }
-
+/*
 export const profileApi = {
   // GET /api/auth/me
   getMe: () => get('/auth/me'),
@@ -160,6 +155,46 @@ export const profileApi = {
  
   // POST /api/auth/change-password
   changePassword: body => post('/auth/change-password', body),
+}*/
+export const profileApi = {
+ 
+  get: () => get('/auth/me'),
+ 
+  updateProfile: async (body) => {
+    const res = await put('/auth/profile', body)
+    // Update localStorage so Layout reflects immediately
+    const current = JSON.parse(localStorage.getItem('pp_user') || '{}')
+    localStorage.setItem('pp_user', JSON.stringify({
+      ...current,
+      fullName: res.profile?.fullName || current.fullName,
+      email:    res.profile?.email    || current.email,
+    }))
+    return res
+  },
+ 
+  uploadImage: async (body) => {
+    const res = await post('/auth/profile/image', body)
+    // Save image to localStorage so Layout updates instantly
+    const current = JSON.parse(localStorage.getItem('pp_user') || '{}')
+    localStorage.setItem('pp_user', JSON.stringify({
+      ...current,
+      profileImage: res.profileImage || null,
+    }))
+    return res
+  },
+ 
+  removeImage: async () => {
+    const res = await del('/auth/profile/image')
+    // Clear image from localStorage
+    const current = JSON.parse(localStorage.getItem('pp_user') || '{}')
+    localStorage.setItem('pp_user', JSON.stringify({
+      ...current,
+      profileImage: null,
+    }))
+    return res
+  },
+ 
+  changePassword: (body) => post('/auth/change-password', body),
 }
 
 export const storeApi = {

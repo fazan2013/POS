@@ -220,22 +220,48 @@ function ProfileTab({ onToast }) {
   const [pendingImage, setPendingImage] = useState(null)
 
   // ── Load from API ─────────────────────────────
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      try {
-        const data = await profileApi.getMe()
-        setProfileData(data)
-        setImagePreview(data.profileImage || null)
-      } catch (err) {
-        console.warn('Profile load error:', err.message)
-        onToast('Could not load profile from server', 'error')
-      } finally {
-        setLoading(false)
+  
+ useEffect(() => {
+  async function load() {
+    setLoading(true)
+    try {
+      const data = await profileApi.get()
+      setProfileData(data)
+
+      // Sync localStorage with latest profile from DB
+      // This ensures Layout always has up-to-date image
+      const current = JSON.parse(localStorage.getItem('pp_user') || '{}')
+      localStorage.setItem('pp_user', JSON.stringify({
+        ...current,
+        fullName:     data.fullName,
+        email:        data.email,
+        profileImage: data.profileImage || null,
+      }))
+
+      // Fill form refs
+      setTimeout(() => {
+        const [fn, ...rest] = (data.fullName || '').split(' ')
+        if (firstNameRef.current) firstNameRef.current.value = fn || ''
+        if (lastNameRef.current)  lastNameRef.current.value  = rest.join(' ') || ''
+        if (emailRef.current)     emailRef.current.value     = data.email || ''
+        if (phoneRef.current)     phoneRef.current.value     = data.phone || ''
+      }, 0)
+
+      // Show existing profile image
+      if (data.profileImage) {
+        setImagePreview(data.profileImage)
       }
+
+    } catch (err) {
+      onToast('Could not load profile: ' + err.message, 'error')
+    } finally {
+      setLoading(false)
     }
-    load()
-  }, [])
+  }
+  load()
+}, [])
+
+
 
   // ── Derive display values ─────────────────────
   const displayName  = profileData?.fullName || currentUser?.fullName || ''
@@ -299,23 +325,17 @@ function ProfileTab({ onToast }) {
 
   // ── Remove image ──────────────────────────────
   
-  async function handleRemoveImage() {
+ async function handleRemoveImage() {
   if (!confirm('Remove your profile photo?')) return
   setRemovingImg(true)
   try {
     await profileApi.removeImage()
- 
+    // profileApi.removeImage already clears localStorage
+
     setImagePreview(null)
     setPendingImage(null)
     setProfileData(p => p ? { ...p, profileImage: null } : p)
- 
-    // ── Remove from localStorage too ─────────────
-    const currentStored = JSON.parse(localStorage.getItem('pp_user') || '{}')
-    localStorage.setItem('pp_user', JSON.stringify({
-      ...currentStored,
-      profileImage: null,
-    }))
- 
+
     onToast('Profile photo removed', 'success')
   } catch (err) {
     onToast(err.message || 'Failed to remove photo', 'error')
@@ -325,67 +345,55 @@ function ProfileTab({ onToast }) {
 }
 
 
+
+
   // ── Save profile (text + image together) ──────
-  async function handleSave() {
+ async function handleSave() {
   const firstName = firstNameRef.current?.value?.trim() || ''
   const lastName  = lastNameRef.current?.value?.trim()  || ''
   const email     = emailRef.current?.value?.trim()     || ''
   const phone     = phoneRef.current?.value?.trim()     || ''
- 
+
   const e = {}
   if (!firstName) e.firstName = 'First name is required'
   if (!email)     e.email     = 'Email is required'
   if (Object.keys(e).length) { setErrors(e); return }
- 
+
   setSaving(true)
   try {
-    // ── Step 1: Upload image if user picked one ──
+    // ── Step 1: Upload image if user picked a new one ──
     let finalImageUrl = profileData?.profileImage || null
- 
+
     if (pendingImage) {
-      try {
-        const imgRes = await profileApi.uploadImage({
-          imageBase64: pendingImage.base64,
-          mimeType:    pendingImage.mimeType,
-        })
-        // imgRes = { message: "...", profileImage: "data:image/jpeg;base64,..." }
-        finalImageUrl = imgRes.profileImage
-        setPendingImage(null)
-        setImagePreview(finalImageUrl)
-      } catch (imgErr) {
-        onToast('Image upload failed: ' + imgErr.message, 'error')
-        setSaving(false)
-        return
-      }
+      const imgRes = await profileApi.uploadImage({
+        imageBase64: pendingImage.base64,
+        mimeType:    pendingImage.mimeType,
+      })
+      // profileApi.uploadImage already saves to localStorage
+      finalImageUrl = imgRes.profileImage
+      setPendingImage(null)
+      setImagePreview(finalImageUrl)
     }
- 
-    // ── Step 2: Save profile text ────────────────
-    const profileRes = await profileApi.updateProfile({
+
+    // ── Step 2: Save profile text ──────────────────
+    await profileApi.updateProfile({
       fullName: `${firstName} ${lastName}`.trim(),
       email,
       phone: phone || null,
     })
-    // profileRes = { message: "...", profile: { id, fullName, email, role, ... } }
- 
-    const updatedProfile = profileRes.profile
- 
-    // ── Step 3: Update local state ───────────────
-    setProfileData({ ...updatedProfile, profileImage: finalImageUrl })
- 
-    // ── Step 4: CRITICAL — save to localStorage ──
-    // Must include profileImage or Layout won't show it
-    const currentStored = JSON.parse(localStorage.getItem('pp_user') || '{}')
-    const merged = {
-      ...currentStored,
-      fullName:     updatedProfile.fullName,
-      email:        updatedProfile.email,
-      role:         updatedProfile.role,
-      profileImage: finalImageUrl,   // ← this is what Layout reads
-    }
-    localStorage.setItem('pp_user', JSON.stringify(merged))
- 
+    // profileApi.updateProfile already updates localStorage
+
+    // ── Step 3: Update local state ─────────────────
+    setProfileData(p => ({
+      ...p,
+      fullName:     `${firstName} ${lastName}`.trim(),
+      email,
+      phone:        phone || null,
+      profileImage: finalImageUrl,
+    }))
+
     onToast('Profile saved successfully', 'success')
- 
+
   } catch (err) {
     onToast(err.message || 'Failed to save profile', 'error')
   } finally {
