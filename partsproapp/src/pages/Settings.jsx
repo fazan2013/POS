@@ -1,14 +1,14 @@
 // ================================================
 // src/pages/Settings.jsx  — Profile tab API connected
 // ================================================
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect,useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 /*import {
   IconUser, IconBuildingStore, IconBell, IconShield,
   IconPalette, IconReceipt, IconDatabase, IconDeviceFloppy,
   IconCheck, IconEye, IconEyeOff, IconUpload, IconTrash,
   IconAlertTriangle, IconMoon, IconSun, IconLogout,
-  IconX, IconRefresh,IconPackage
+  IconX, IconRefresh,IconPackage,IconTag
 } from '@tabler/icons-react'*/
 import {
   IconUser,
@@ -34,6 +34,7 @@ import {
   IconTruck,
   IconDownload,
   IconRefresh,
+  IconTag,IconSearch,IconPlus,IconEdit
 } from '@tabler/icons-react'
 
 import { getUser, clearSession } from '../services/api'
@@ -42,9 +43,24 @@ import { storeApi } from '../services/api'
 import { receiptApi } from '../services/api'
 import { notifApi } from '../services/api'
 import { appearanceApi } from '../services/api'
-import { exportApi } from '../services/api'
+import { exportApi,categoriesApi,brandsApi } from '../services/api'
 
 
+
+const PRESET_COLORS = [
+  '#3b82f6', // blue
+  '#ec4899', // pink
+  '#0ea5e9', // sky
+  '#eab308', // yellow
+  '#a855f7', // purple
+  '#f97316', // orange
+  '#14b8a6', // teal
+  '#06b6d4', // cyan
+  '#ef4444', // red
+  '#22c55e', // green
+  '#6b7280', // gray
+  '#0f172a', // slate
+]
 
 // ── API calls for profile ─────────────────────────
 // Add these endpoints to your api.js:
@@ -57,6 +73,419 @@ import { exportApi } from '../services/api'
 //
 // For now we read from localStorage and simulate save.
 // Wire up when backend endpoints are ready.
+
+function ColorDot({ color, size = 'sm' }) {
+  const dim = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4'
+  return (
+    <span
+      className={`${dim} rounded-full inline-block flex-shrink-0`}
+      style={{ background: color || '#6b7280' }}
+    />
+  )
+}
+
+function CategoryBadge({ name, color }) {
+  return (
+    <span
+      className="text-[10px] font-medium px-2 py-0.5 rounded-full inline-flex
+                 items-center gap-1.5"
+      style={{
+        background: (color || '#6b7280') + '20',
+        color:       color || '#6b7280',
+      }}
+    >
+      <ColorDot color={color} />
+      {name}
+    </span>
+  )
+}
+
+
+function ColorPicker({ value, onChange }) {
+  return (
+    <div className="space-y-2">
+      {/* Preset swatches */}
+      <div className="flex flex-wrap gap-2">
+        {PRESET_COLORS.map(c => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => onChange(c)}
+            className={`w-7 h-7 rounded-full transition-all flex items-center
+                        justify-center flex-shrink-0
+                        ${value === c
+                          ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                          : 'hover:scale-105'}`}
+            style={{ background: c }}
+            title={c}
+          >
+            {value === c && (
+              <IconCheck size={12} className="text-white" />
+            )}
+          </button>
+        ))}
+        {/* Custom color input */}
+        <label
+          className="w-7 h-7 rounded-full border-2 border-dashed border-gray-300
+                     flex items-center justify-center cursor-pointer
+                     hover:border-gray-400 text-gray-400 text-lg leading-none"
+          title="Custom color"
+        >
+          +
+          <input
+            type="color"
+            value={value || '#6b7280'}
+            onChange={e => onChange(e.target.value)}
+            className="absolute opacity-0 w-0 h-0"
+          />
+        </label>
+      </div>
+      {/* Hex preview */}
+      {value && (
+        <div className="flex items-center gap-2">
+          <div
+            className="w-5 h-5 rounded-full border border-gray-200 flex-shrink-0"
+            style={{ background: value }}
+          />
+          <span className="text-xs text-gray-500 font-mono">{value}</span>
+        </div>
+      )}
+    </div>
+  )
+}
+
+
+function ItemFormModal({ type, item, onClose, onSave }) {
+  const isEdit     = !!item?.id
+  const isCategory = type === 'category'
+
+  const nameRef    = useRef(null)
+  const descRef    = useRef(null)
+  const countryRef = useRef(null)
+
+  const [color,   setColor]   = useState(item?.colorCode || '#3b82f6')
+  const [saving,  setSaving]  = useState(false)
+  const [errors,  setErrors]  = useState({})
+
+  function clearError(field) {
+    if (errors[field]) setErrors(p => ({ ...p, [field]: null }))
+  }
+
+  async function handleSave() {
+    const name    = nameRef.current?.value?.trim()    || ''
+    const desc    = descRef.current?.value?.trim()    || ''
+    const country = countryRef.current?.value?.trim() || ''
+
+    const e = {}
+    if (!name) e.name = `${isCategory ? 'Category' : 'Brand'} name is required`
+    if (Object.keys(e).length) { setErrors(e); return }
+
+    setSaving(true)
+    try {
+      await onSave({
+        name,
+        description: desc || null,
+        ...(isCategory ? { colorCode: color } : { country: country || null }),
+        sortOrder: item?.sortOrder || 0,
+        isActive:  true,
+      })
+    } catch (err) {
+      setErrors({ name: err.message })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const inputClass = field =>
+    `w-full px-3 py-2.5 border rounded-lg text-sm focus:outline-none
+     transition-colors
+     ${errors[field]
+       ? 'border-red-300 focus:border-red-400'
+       : 'border-gray-200 focus:border-blue-400'}`
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center
+                    justify-center p-4"
+         onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm
+                      overflow-hidden"
+           onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4
+                        border-b border-gray-100">
+          <p className="text-sm font-medium text-gray-900">
+            {isEdit ? 'Edit' : 'Add'} {isCategory ? 'category' : 'brand'}
+          </p>
+          <button onClick={onClose}
+                  className="w-7 h-7 flex items-center justify-center border
+                             border-gray-200 rounded-lg text-gray-400">
+            <IconX size={14} />
+          </button>
+        </div>
+
+        {/* Form */}
+        <div className="px-6 py-5 space-y-4">
+
+          {/* Name */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500
+                              uppercase tracking-wider mb-1.5">
+              Name <span className="text-red-400">*</span>
+            </label>
+            <input
+              ref={nameRef}
+              key={`name-${item?.id || 'new'}`}
+              defaultValue={item?.name || ''}
+              placeholder={isCategory ? 'e.g. Engine' : 'e.g. Toyota'}
+              onChange={() => clearError('name')}
+              className={inputClass('name')}
+              autoFocus
+            />
+            {errors.name && (
+              <p className="text-[10px] text-red-500 mt-1 flex items-center gap-1">
+                <IconAlertTriangle size={10} />{errors.name}
+              </p>
+            )}
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500
+                              uppercase tracking-wider mb-1.5">
+              Description <span className="text-gray-300 normal-case
+                                           font-normal">(optional)</span>
+            </label>
+            <input
+              ref={descRef}
+              key={`desc-${item?.id || 'new'}`}
+              defaultValue={item?.description || ''}
+              placeholder={isCategory
+                ? 'e.g. Engine parts and components'
+                : 'e.g. Japanese manufacturer'}
+              className={inputClass('')}
+            />
+          </div>
+
+          {/* Color picker — categories only */}
+          {isCategory && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500
+                                uppercase tracking-wider mb-2">
+                Badge color
+              </label>
+              <ColorPicker value={color} onChange={setColor} />
+              {/* Live preview */}
+              <div className="mt-3 flex items-center gap-2">
+                <p className="text-[10px] text-gray-400">Preview:</p>
+                <CategoryBadge
+                  name={nameRef.current?.value || 'Category'}
+                  color={color}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Country — brands only */}
+          {!isCategory && (
+            <div>
+              <label className="block text-xs font-medium text-gray-500
+                                uppercase tracking-wider mb-1.5">
+                Country of origin <span className="text-gray-300 normal-case
+                                                   font-normal">(optional)</span>
+              </label>
+              <input
+                ref={countryRef}
+                key={`country-${item?.id || 'new'}`}
+                defaultValue={item?.country || ''}
+                placeholder="e.g. Japan, South Korea, USA"
+                className={inputClass('')}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex gap-3 px-6 pb-5">
+          <button onClick={onClose}
+                  className="flex-1 py-2.5 border border-gray-200 rounded-xl
+                             text-sm text-gray-600 hover:border-gray-300">
+            Cancel
+          </button>
+          <button onClick={handleSave} disabled={saving}
+                  className="flex-1 py-2.5 bg-slate-900 text-white rounded-xl
+                             text-sm font-medium hover:bg-slate-700
+                             flex items-center justify-center gap-2
+                             disabled:opacity-50 disabled:cursor-not-allowed">
+            {saving
+              ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white
+                                   rounded-full animate-spin" /> Saving…</>
+              : <><IconCheck size={14} />
+                  {isEdit ? 'Save changes' : `Add ${isCategory ? 'category' : 'brand'}`}
+                </>}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+
+function DeleteGuardModal({ type, item, onClose, onConfirm, loading }) {
+  const hasActiveParts = item?.partsCount > 0
+  const isCategory     = type === 'category'
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center
+                    justify-center p-4"
+         onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6"
+           onClick={e => e.stopPropagation()}>
+
+        <div className={`w-12 h-12 rounded-full flex items-center justify-center
+                         mx-auto mb-4
+                         ${hasActiveParts ? 'bg-amber-100' : 'bg-red-100'}`}>
+          {hasActiveParts
+            ? <IconAlertTriangle size={22} className="text-amber-600" />
+            : <IconTrash size={22} className="text-red-500" />}
+        </div>
+
+        <h3 className="text-sm font-medium text-gray-900 text-center mb-2">
+          {hasActiveParts ? 'Cannot delete' : `Delete ${isCategory ? 'category' : 'brand'}?`}
+        </h3>
+
+        {hasActiveParts ? (
+          <div className="text-center space-y-2">
+            <p className="text-sm text-gray-600">
+              <span className="font-medium text-gray-900">{item.name}</span> is used
+              by <span className="font-medium text-red-600">{item.partsCount} active parts</span>.
+            </p>
+            <p className="text-xs text-gray-400">
+              Reassign or remove those parts before deleting this{' '}
+              {isCategory ? 'category' : 'brand'}.
+            </p>
+            <button onClick={onClose}
+                    className="mt-4 w-full py-2.5 bg-slate-900 text-white rounded-xl
+                               text-sm font-medium hover:bg-slate-700">
+              Got it
+            </button>
+          </div>
+        ) : (
+          <>
+            <p className="text-sm text-gray-500 text-center mb-5">
+              <span className="font-medium text-gray-800">{item.name}</span> will be
+              permanently removed. No parts are currently using it.
+            </p>
+            <div className="flex gap-3">
+              <button onClick={onClose}
+                      className="flex-1 py-2.5 border border-gray-200 rounded-xl
+                                 text-sm text-gray-600 hover:border-gray-300">
+                Cancel
+              </button>
+              <button onClick={onConfirm} disabled={loading}
+                      className="flex-1 py-2.5 bg-red-500 text-white rounded-xl
+                                 text-sm font-medium hover:bg-red-600
+                                 flex items-center justify-center gap-2
+                                 disabled:opacity-50">
+                {loading
+                  ? <><span className="w-4 h-4 border-2 border-white/30
+                                       border-t-white rounded-full animate-spin" />
+                      Deleting…</>
+                  : 'Yes, delete'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+
+// ── Item list row ─────────────────────────────────
+function ItemRow({ item, type, onEdit, onDelete }) {
+  const isCategory = type === 'category'
+  const hasActiveParts = item.partsCount > 0
+
+  return (
+    <div className="flex items-center gap-3 px-5 py-3.5 border-b
+                    border-gray-50 last:border-0 hover:bg-gray-50
+                    transition-colors">
+
+      {/* Color dot / country flag */}
+      {isCategory ? (
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center
+                        flex-shrink-0"
+             style={{ background: (item.colorCode || '#6b7280') + '20' }}>
+          <ColorDot color={item.colorCode} size="md" />
+        </div>
+      ) : (
+        <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center
+                        justify-center flex-shrink-0 text-xs font-medium
+                        text-gray-600">
+          {item.name?.charAt(0)}
+        </div>
+      )}
+
+      {/* Name + description */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-medium text-gray-900">{item.name}</p>
+          {isCategory && item.colorCode && (
+            <CategoryBadge name={item.name} color={item.colorCode} />
+          )}
+          {!isCategory && item.country && (
+            <span className="text-[10px] text-gray-400">{item.country}</span>
+          )}
+        </div>
+        {item.description && (
+          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+            {item.description}
+          </p>
+        )}
+      </div>
+
+      {/* Parts count */}
+      <div className="text-right flex-shrink-0">
+        <p className={`text-xs font-medium
+          ${hasActiveParts ? 'text-gray-900' : 'text-gray-400'}`}>
+          {item.partsCount}
+        </p>
+        <p className="text-[10px] text-gray-400 mt-0.5">parts</p>
+      </div>
+
+      {/* Actions */}
+      <div className="flex gap-1.5 flex-shrink-0">
+        <button
+          onClick={() => onEdit(item)}
+          className="w-7 h-7 flex items-center justify-center border
+                     border-gray-200 rounded-lg text-gray-400
+                     hover:border-blue-300 hover:text-blue-500
+                     transition-colors">
+          <IconEdit size={13} />
+        </button>
+        <button
+          onClick={() => onDelete(item)}
+          className={`w-7 h-7 flex items-center justify-center border
+                      rounded-lg transition-colors
+            ${hasActiveParts
+              ? 'border-gray-100 text-gray-300 cursor-not-allowed'
+              : 'border-gray-200 text-gray-400 hover:border-red-300 hover:text-red-500'}`}
+          title={hasActiveParts
+            ? `Cannot delete — ${item.partsCount} parts use this`
+            : 'Delete'}>
+          <IconTrash size={13} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+
+
+
+
+
 
 // ── Toast ─────────────────────────────────────────
 function Toast({ message, type, onClose }) {
@@ -2575,6 +3004,265 @@ function DataTab({ onToast }) {
   )
 }
 
+
+//
+function CatBrandTab({ onToast }) {
+  const [activeSection, setActiveSection] = useState('categories')
+  const isCategory = activeSection === 'categories'
+
+  // ── Data ──────────────────────────────────────
+  const [categories, setCategories] = useState([])
+  const [brands,     setBrands]     = useState([])
+  const [loading,    setLoading]    = useState(true)
+
+  // ── Modals ────────────────────────────────────
+  const [formTarget,   setFormTarget]   = useState(null)  // {type, item}
+  const [deleteTarget, setDeleteTarget] = useState(null)  // {type, item}
+  const [deleting,     setDeleting]     = useState(false)
+  const [search,       setSearch]       = useState('')
+
+  // ── Load ──────────────────────────────────────
+  async function loadAll() {
+    setLoading(true)
+    try {
+      const [cats, brnds] = await Promise.all([
+        categoriesApi.getAll(),
+        brandsApi.getAll(),
+      ])
+      setCategories(cats  || [])
+      setBrands(brnds || [])
+    } catch (err) {
+      onToast('Could not load data: ' + err.message, 'error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { loadAll() }, [])
+
+  // ── CRUD ──────────────────────────────────────
+  async function handleSave(data) {
+    const type = formTarget.type
+    const item = formTarget.item
+
+    if (item) {
+      // Edit
+      if (type === 'category') {
+        await categoriesApi.update(item.id, {
+          name:        data.name,
+          description: data.description,
+          colorCode:   data.colorCode,
+          sortOrder:   item.sortOrder || 0,
+          isActive:    true,
+        })
+      } else {
+        await brandsApi.update(item.id, {
+          name:        data.name,
+          description: data.description,
+          country:     data.country,
+          sortOrder:   item.sortOrder || 0,
+          isActive:    true,
+        })
+      }
+      onToast(`${type === 'category' ? 'Category' : 'Brand'} updated ✓`)
+    } else {
+      // Create
+      if (type === 'category') {
+        await categoriesApi.create(data)
+      } else {
+        await brandsApi.create(data)
+      }
+      onToast(`${type === 'category' ? 'Category' : 'Brand'} added ✓`)
+    }
+
+    setFormTarget(null)
+    loadAll()
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      if (deleteTarget.type === 'category') {
+        await categoriesApi.delete(deleteTarget.item.id)
+      } else {
+        await brandsApi.delete(deleteTarget.item.id)
+      }
+      onToast(`${deleteTarget.item.name} deleted`)
+      setDeleteTarget(null)
+      loadAll()
+    } catch (err) {
+      onToast(err.message, 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  // ── Filtered list ─────────────────────────────
+  const items    = isCategory ? categories : brands
+  const filtered = items.filter(i =>
+    i.name.toLowerCase().includes(search.toLowerCase())
+  )
+  const type     = isCategory ? 'category' : 'brand'
+  const total    = items.length
+  const inUse    = items.filter(i => i.partsCount > 0).length
+
+  return (
+    <Section
+      title="Categories and brands"
+      subtitle="Manage lookup values used in parts"
+      icon={<IconTag size={16} />}
+    >
+      <div className="space-y-5">
+
+        {/* Section toggle */}
+        <div className="flex gap-2 p-1 bg-gray-100 rounded-xl w-fit">
+          {[
+            { key: 'categories', label: 'Categories', count: categories.length },
+            { key: 'brands',     label: 'Brands',     count: brands.length     },
+          ].map(s => (
+            <button
+              key={s.key}
+              onClick={() => { setActiveSection(s.key); setSearch('') }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs
+                          font-medium transition-all
+                          ${activeSection === s.key
+                            ? 'bg-white text-gray-900 shadow-sm'
+                            : 'text-gray-500 hover:text-gray-700'}`}
+            >
+              {s.label}
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full
+                ${activeSection === s.key
+                  ? 'bg-gray-100 text-gray-600'
+                  : 'bg-gray-200 text-gray-500'}`}>
+                {s.count}
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {/* Stats row */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Total',   value: total,         color: 'text-gray-900'  },
+            { label: 'In use',  value: inUse,         color: 'text-green-600' },
+            { label: 'Unused',  value: total - inUse, color: 'text-gray-400'  },
+          ].map(s => (
+            <div key={s.label}
+                 className="bg-gray-50 border border-gray-100 rounded-xl p-3
+                            text-center">
+              <p className={`text-lg font-medium ${s.color}`}>{s.value}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">{s.label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Search + Add */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <IconSearch size={13}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              type="text"
+              placeholder={`Search ${isCategory ? 'categories' : 'brands'}…`}
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-8 pr-3 py-2 border border-gray-200 rounded-lg
+                         text-xs focus:outline-none focus:border-blue-400 bg-gray-50"
+            />
+          </div>
+          <button
+            onClick={() => setFormTarget({ type, item: null })}
+            className="flex items-center gap-1.5 px-3 py-2 bg-slate-900 text-white
+                       rounded-lg text-xs font-medium hover:bg-slate-700">
+            <IconPlus size={13} />
+            Add {isCategory ? 'category' : 'brand'}
+          </button>
+        </div>
+
+        {/* List */}
+        <div className="border border-gray-100 rounded-xl overflow-hidden">
+          {/* Head */}
+          <div className="grid grid-cols-[2fr_1fr_0.5fr]
+                          px-5 py-2.5 bg-gray-50 border-b border-gray-100">
+            <p className="text-[10px] font-medium text-gray-400
+                          uppercase tracking-wider">Name</p>
+            {isCategory
+              ? <p className="text-[10px] font-medium text-gray-400
+                              uppercase tracking-wider">Color</p>
+              : <p className="text-[10px] font-medium text-gray-400
+                              uppercase tracking-wider">Country</p>}
+            <p className="text-[10px] font-medium text-gray-400
+                          uppercase tracking-wider text-right">Parts</p>
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-10">
+              <div className="w-5 h-5 border-2 border-gray-200 border-t-slate-700
+                              rounded-full animate-spin" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center
+                            py-10 gap-2 text-gray-400">
+              <IconTag size={24} className="text-gray-200" />
+              <p className="text-xs">
+                {search ? 'No results' : `No ${isCategory ? 'categories' : 'brands'} yet`}
+              </p>
+            </div>
+          ) : (
+            filtered.map(item => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                type={type}
+                onEdit={i => setFormTarget({ type, item: i })}
+                onDelete={i => setDeleteTarget({ type, item: i })}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex items-start gap-2 px-3 py-3 bg-blue-50
+                        border border-blue-100 rounded-xl">
+          <IconAlertTriangle size={14}
+            className="text-blue-500 flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-blue-600 leading-relaxed">
+            Items with active parts cannot be deleted.
+            Reassign or remove those parts first.
+            Changes apply to all new and existing part forms immediately.
+          </p>
+        </div>
+      </div>
+
+      {/* Form modal */}
+      {formTarget && (
+        <ItemFormModal
+          key={`${formTarget.type}-${formTarget.item?.id || 'new'}`}
+          type={formTarget.type}
+          item={formTarget.item}
+          onClose={() => setFormTarget(null)}
+          onSave={handleSave}
+        />
+      )}
+
+      {/* Delete guard modal */}
+      {deleteTarget && (
+        <DeleteGuardModal
+          type={deleteTarget.type}
+          item={deleteTarget.item}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={handleDeleteConfirm}
+          loading={deleting}
+        />
+      )}
+    </Section>
+  )
+}
+//
+
+
+
 // ════════════════════════════════════════════════
 // MAIN SETTINGS PAGE
 // ════════════════════════════════════════════════
@@ -2586,6 +3274,7 @@ const NAV = [
   { key: 'appearance', label: 'Appearance',     icon: <IconPalette size={15} />       },
   { key: 'security',   label: 'Security',       icon: <IconShield size={15} />        },
   { key: 'data',       label: 'Data & Backup',  icon: <IconDatabase size={15} />      },
+  { key: 'catalogue', label: 'Categories & brands', icon: <IconTag size={15}/> },
 ]
 
 export default function Settings() {
@@ -2613,6 +3302,7 @@ export default function Settings() {
     appearance: <AppearanceTab {...tabProps} />,
     security:   <SecurityTab   {...tabProps} />,
     data:       <DataTab       {...tabProps} />,
+    catalogue:  <CatBrandTab   {...tabProps} />,
   }
 
   return (
