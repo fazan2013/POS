@@ -244,6 +244,18 @@ export const brandsApi = {
 }
 
 
+export const usersApi = {
+  getAll:        (role = '', isActive) =>
+    get(`/users?${role ? `role=${role}&` : ''}${isActive !== undefined ? `isActive=${isActive}` : ''}`),
+ 
+  getById:       (id)   => get(`/users/${id}`),
+  create:        (body) => post('/users', body),
+  update:        (id, body) => put(`/users/${id}`, body),
+  toggle:        (id)   => patch(`/users/${id}/toggle`),
+  resetPassword: (id, body) => post(`/users/${id}/reset-password`, body),
+  delete:        (id)   => del(`/users/${id}`),
+}
+
 async function downloadFile(path, defaultFileName) {
   const token = getToken()
  

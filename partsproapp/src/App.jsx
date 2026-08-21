@@ -24,6 +24,7 @@ import PurchaseForm   from './pages/PurchaseForm'
 import PurchaseDetail from './pages/PurchaseDetail'
 import GoodsReceive   from './pages/GoodsReceive'
 import SupplierInvoiceForm from './pages/SupplierInvoiceForm'
+import Users from './pages/Users'
 
 // ── Default home by role ──────────────────────────
 function RoleHome() {
@@ -129,6 +130,9 @@ export default function App() {
            <SupplierInvoiceForm />
          </Protected>
        } />       
+
+       <Route path="/users"
+       element={<Protected path="/users"><Users /></Protected>} />
 
         {/* Fallback */}
         <Route path="*" element={<RoleHome />} />

@@ -11,6 +11,7 @@ import {
 import { getUser, clearSession } from '../services/api'
 import { IconShoppingBag } from '@tabler/icons-react'
 
+
 // ── Role-based nav config ─────────────────────────
 const ALL_NAV = [
   {
@@ -39,12 +40,23 @@ const ALL_NAV = [
       roles:['Administrator','Store Manager','Warehouse'] },
     { to:'/reports',   label:'Reports',   icon:<IconChartBar size={17}/>,
       roles:['Administrator','Store Manager'] },
+
+      
+
     ]
   },
   {
     section: 'System',
     links: [
+      {
+      to:    '/users',
+      label: 'Users',
+      icon:  <IconUsers size={17} />,
+      roles: ['Administrator'],
+    },
       { to:'/settings', label:'Settings', icon:<IconSettings size={17}/>, roles:['Administrator','Store Manager'] },
+      
+
     ]
   },
 ]
