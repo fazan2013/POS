@@ -19,6 +19,11 @@ import Settings  from './pages/Settings'
 import PartForm  from './pages/PartForm'
 import { storeApi,setCurrency } from './services/api'
 import { useEffect } from 'react'
+import Purchases      from './pages/Purchases'
+import PurchaseForm   from './pages/PurchaseForm'
+import PurchaseDetail from './pages/PurchaseDetail'
+import GoodsReceive   from './pages/GoodsReceive'
+import SupplierInvoiceForm from './pages/SupplierInvoiceForm'
 
 // ── Default home by role ──────────────────────────
 function RoleHome() {
@@ -101,6 +106,29 @@ export default function App() {
 
         <Route path="/settings"
                element={<Protected path="/settings"><Settings /></Protected>} />
+
+
+<Route path="/purchases"
+       element={<Protected path="/purchases"><Purchases /></Protected>} />
+ 
+<Route path="/purchases/new"
+       element={<Protected path="/purchases/new"><PurchaseForm /></Protected>} />
+ 
+<Route path="/purchases/:id"
+       element={<Protected path="/purchases"><PurchaseDetail /></Protected>} />
+ 
+<Route path="/purchases/:id/edit"
+       element={<Protected path="/purchases/new"><PurchaseForm /></Protected>} />
+ 
+<Route path="/purchases/:id/receive"
+       element={<Protected path="/purchases/receive"><GoodsReceive /></Protected>} />
+
+        <Route path="/purchases/:id/invoice"
+       element={
+         <Protected path="/purchases/invoice">
+           <SupplierInvoiceForm />
+         </Protected>
+       } />       
 
         {/* Fallback */}
         <Route path="*" element={<RoleHome />} />

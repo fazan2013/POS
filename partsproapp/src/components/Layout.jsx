@@ -9,6 +9,7 @@ import {
   IconLogout, IconUser, IconX
 } from '@tabler/icons-react'
 import { getUser, clearSession } from '../services/api'
+import { IconShoppingBag } from '@tabler/icons-react'
 
 // ── Role-based nav config ─────────────────────────
 const ALL_NAV = [
@@ -19,14 +20,25 @@ const ALL_NAV = [
       { to:'/pos',       label:'POS / Sales', icon:<IconShoppingCart size={17}/>,   roles:['Administrator','Store Manager','Cashier']   },
       { to:'/orders',    label:'Orders',      icon:<IconFileInvoice size={17}/>,    roles:['Administrator','Store Manager','Cashier']   },
       { to:'/inventory', label:'Inventory',   icon:<IconPackage size={17}/>,        roles:['Administrator','Store Manager','Warehouse'] },
+      {
+  to:    '/purchases',
+  label: 'Purchases',
+  icon:  <IconShoppingBag size={17} />,
+  roles: ['Administrator', 'Store Manager', 'Warehouse'],
+},
     ]
   },
   {
     section: 'Management',
     links: [
-      { to:'/customers', label:'Customers', icon:<IconUsers size={17}/>,    roles:['Administrator','Store Manager','Cashier']   },
-      { to:'/suppliers', label:'Suppliers', icon:<IconTruck size={17}/>,    roles:['Administrator','Store Manager']             },
-      { to:'/reports',   label:'Reports',   icon:<IconChartBar size={17}/>, roles:['Administrator','Store Manager']             },
+         { to:'/customers', label:'Customers', icon:<IconUsers size={17}/>,
+      roles:['Administrator','Store Manager','Cashier'] },
+    { to:'/suppliers', label:'Suppliers', icon:<IconTruck size={17}/>,
+      roles:['Administrator','Store Manager'] },
+    { to:'/purchases', label:'Purchases', icon:<IconShoppingBag size={17}/>,
+      roles:['Administrator','Store Manager','Warehouse'] },
+    { to:'/reports',   label:'Reports',   icon:<IconChartBar size={17}/>,
+      roles:['Administrator','Store Manager'] },
     ]
   },
   {

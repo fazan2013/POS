@@ -280,3 +280,44 @@ async function downloadFile(path, defaultFileName) {
  
   return fileName
 }
+
+export const purchaseApi = {
+  // List
+  getAll:    (page = 1, pageSize = 10, status = '', supplierId = null) =>
+    get(`/purchase-orders?page=${page}&pageSize=${pageSize}` +
+        `${status ? `&status=${status}` : ''}` +
+        `${supplierId ? `&supplierId=${supplierId}` : ''}`),
+
+  getSummary: () => get('/purchase-orders/summary'),
+  getById:    (id) => get(`/purchase-orders/${id}`),
+
+  // CRUD
+  create: (body)     => post('/purchase-orders', body),
+  update: (id, body) => put(`/purchase-orders/${id}`, body),
+
+  // Status transitions
+  approve: (id) => patch(`/purchase-orders/${id}/approve`),
+  send:    (id) => patch(`/purchase-orders/${id}/send`),
+  cancel:  (id) => patch(`/purchase-orders/${id}/cancel`),
+}
+
+export const grnApi = {
+  getAll:  (page = 1, pageSize = 10, purchaseOrderId = null) =>
+    get(`/grn?page=${page}&pageSize=${pageSize}` +
+        `${purchaseOrderId ? `&purchaseOrderId=${purchaseOrderId}` : ''}`),
+
+  getById: (id)   => get(`/grn/${id}`),
+  create:  (body) => post('/grn', body),
+}
+
+export const invoiceApi = {
+  getAll:       (page = 1, pageSize = 10, status = '') =>
+    get(`/supplier-invoices?page=${page}&pageSize=${pageSize}` +
+        `${status ? `&status=${status}` : ''}`),
+
+  getById:      (id)       => get(`/supplier-invoices/${id}`),
+  create:       (body)     => post('/supplier-invoices', body),
+  updateStatus: (id, body) => patch(`/supplier-invoices/${id}/status`, body),
+}
+
+

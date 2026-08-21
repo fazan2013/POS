@@ -13,6 +13,10 @@ const ROUTE_ROLES = {
   '/suppliers': ['Administrator', 'Store Manager'],
   '/reports':   ['Administrator', 'Store Manager'],
   '/settings':  ['Administrator', 'Store Manager'],
+  '/purchases':         ['Administrator', 'Store Manager', 'Warehouse'],
+'/purchases/new':     ['Administrator', 'Store Manager'],
+'/purchases/receive': ['Administrator', 'Store Manager', 'Warehouse'],
+'/purchases/invoice':  ['Administrator', 'Store Manager'],
 }
 
 // ── Default landing page per role ─────────────────
